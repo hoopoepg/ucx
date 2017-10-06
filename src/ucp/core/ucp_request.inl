@@ -207,6 +207,7 @@ ucp_request_send_state_reset(ucp_request_t *req,
     case UCP_REQUEST_SEND_PROTO_RNDV_GET:
         if (UCP_DT_IS_CONTIG(req->send.datatype)) {
             req->send.state.dt.contig.memh = UCT_MEM_HANDLE_NULL;
+            ucp_request_clear_rails(&req->send.state);
         }
         /* Fall through */
     case UCP_REQUEST_SEND_PROTO_ZCOPY_AM:
@@ -318,3 +319,69 @@ static UCS_F_ALWAYS_INLINE void ucp_request_send_tag_stat(ucp_request_t *req)
         UCP_EP_STAT_TAG_OP(req->send.ep, EAGER);
     }
 }
+
+static UCS_F_ALWAYS_INLINE void
+ucp_request_clear_rails(ucp_dt_state_t *state) {
+    int i;
+    for(i = 0; i < UCP_MAX_RAILS; i++) {
+        state->dt.mrail[i].memh = UCT_MEM_HANDLE_NULL;
+        state->dt.mrail[i].lane = UCP_NULL_LANE;
+    }
+}
+
+static UCS_F_ALWAYS_INLINE int
+ucp_request_is_empty_rail(ucp_dt_state_t *state, int rail) {
+    return state->dt.mrail[rail].memh == UCT_MEM_HANDLE_NULL ||
+           state->dt.mrail[rail].lane == UCP_NULL_LANE;
+}
+
+static UCS_F_ALWAYS_INLINE int
+ucp_request_have_rails(ucp_dt_state_t *state) {
+    return !ucp_request_is_empty_rail(state, 0);
+}
+
+static inline int ucp_request_mrail_reg(ucp_request_t *req)
+{
+    ucp_ep_t        *ep      = req->send.ep;
+    ucp_dt_state_t  *state   = &req->send.state;
+    int              cnt     = 0;
+    ucs_status_t     status;
+    int              i;
+    ucp_lane_index_t lane;
+
+    ucs_assert(UCP_DT_IS_CONTIG(req->send.datatype));
+
+    ucp_request_clear_rails(state);
+
+    for (i = 0; ucp_ep_is_rndv_lane_present(ep, i) && i < UCP_MAX_RAILS; i++) {
+        lane = ucp_ep_get_rndv_get_lane(ep, i);
+
+        if (ucp_ep_rndv_md_flags(ep, lane) & UCT_MD_FLAG_NEED_RKEY) {
+            status = uct_md_mem_reg(ucp_ep_md(ep, lane),
+                                    (void *)req->send.buffer, req->send.length,
+                                    UCT_MD_MEM_ACCESS_RMA, &state->dt.mrail[cnt].memh);
+            ucs_assert_always(status == UCS_OK);
+            state->dt.mrail[cnt].lane = lane;
+            cnt++;
+        }
+    }
+
+    return cnt;
+}
+
+static inline void ucp_request_mrail_dereg(ucp_request_t *req)
+{
+    ucp_dt_state_t  *state = &req->send.state;
+    ucs_status_t     status;
+    int              i;
+
+    for (i = 0; i < UCP_MAX_RAILS && !ucp_request_is_empty_rail(&req->send.state, i); i++) {
+        status = uct_md_mem_dereg(ucp_ep_md(req->send.ep, state->dt.mrail[i].lane),
+                                  state->dt.mrail[i].memh);
+        ucs_assert_always(status == UCS_OK);
+    }
+
+    ucp_request_clear_rails(state);
+}
+
+

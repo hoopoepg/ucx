@@ -125,6 +125,12 @@ struct ucp_request {
                     uintptr_t     remote_request; /* pointer to the sender's send request */
                     uct_rkey_bundle_t rkey_bundle;
                     ucp_request_t *rreq;    /* receive request on the recv side */
+                    unsigned      use_mrail;
+                    unsigned      rail_idx;
+                    struct {
+                        ucp_lane_index_t  lane;
+                        uct_rkey_bundle_t rkey_bundle;
+                    } mrail[UCP_MAX_RAILS];
                 } rndv_get;
 
                 struct {
@@ -203,7 +209,8 @@ void ucp_request_send_buffer_dereg(ucp_request_t *req, ucp_lane_index_t lane);
 
 ucs_status_t ucp_request_memory_reg(ucp_context_t *context, ucp_rsc_index_t rsc_index,
                                     void *buffer, size_t length,
-                                    ucp_datatype_t datatype, ucp_dt_state_t *state);
+                                    ucp_datatype_t datatype,
+                                    ucp_dt_state_t *state);
 
 void ucp_request_memory_dereg(ucp_context_t *context, ucp_rsc_index_t rsc_index,
                               ucp_datatype_t datatype, ucp_dt_state_t *state);

@@ -177,7 +177,8 @@ void ucp_iov_buffer_memh_dereg(uct_md_h uct_md, uct_mem_h *memh,
 UCS_PROFILE_FUNC(ucs_status_t, ucp_request_memory_reg,
                  (context, rsc_index, buffer, length, datatype, state),
                  ucp_context_t *context, ucp_rsc_index_t rsc_index, void *buffer,
-                 size_t length, ucp_datatype_t datatype, ucp_dt_state_t *state)
+                 size_t length, ucp_datatype_t datatype,
+                 ucp_dt_state_t *state)
 {
     ucp_rsc_index_t mdi = context->tl_rscs[rsc_index].md_index;
     uct_md_h uct_md     = context->tl_mds[mdi].md;
