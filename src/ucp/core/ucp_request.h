@@ -36,6 +36,7 @@ enum {
     UCP_REQUEST_FLAG_RNDV                 = UCS_BIT(9),
     UCP_REQUEST_FLAG_OFFLOADED            = UCS_BIT(10),
     UCP_REQUEST_FLAG_BLOCK_OFFLOAD        = UCS_BIT(11),
+    UCP_REQUEST_FLAG_RNDV_MRAIL           = UCS_BIT(12),
 
 #if ENABLE_ASSERT
     UCP_REQUEST_DEBUG_FLAG_EXTERNAL       = UCS_BIT(15)
@@ -121,16 +122,11 @@ struct ucp_request {
                 } proxy;
 
                 struct {
-                    uint64_t      remote_address; /* address of the sender's data buffer */
-                    uintptr_t     remote_request; /* pointer to the sender's send request */
-                    uct_rkey_bundle_t rkey_bundle;
-                    ucp_request_t *rreq;    /* receive request on the recv side */
-                    unsigned      use_mrail;
-                    unsigned      rail_idx;
-                    struct {
-                        ucp_lane_index_t  lane;
-                        uct_rkey_bundle_t rkey_bundle;
-                    } mrail[UCP_MAX_RAILS];
+                    uint64_t           remote_address; /* address of the sender's data buffer */
+                    uintptr_t          remote_request; /* pointer to the sender's send request */
+                    uct_rkey_bundle_t  rkey_bundle;
+                    ucp_request_t     *rreq;           /* receive request on the recv side */
+                    struct ucp_rndv_get_mrail *mrail;  /* multirail info */
                 } rndv_get;
 
                 struct {
@@ -198,7 +194,20 @@ typedef struct ucp_recv_desc {
 } ucp_recv_desc_t;
 
 
+/**
+ * Multirail rendezvous-get info.
+ */
+typedef struct ucp_rndv_get_mrail {
+    unsigned      rail_idx;
+    struct {
+        ucp_lane_index_t  lane;
+        uct_rkey_bundle_t rkey_bundle;
+    } rail[UCP_MAX_RAILS];
+} ucp_rndv_get_mrail_t;
+
+
 extern ucs_mpool_ops_t ucp_request_mpool_ops;
+extern ucs_mpool_ops_t ucp_mrail_mpool_ops;
 
 
 int ucp_request_pending_add(ucp_request_t *req, ucs_status_t *req_status);

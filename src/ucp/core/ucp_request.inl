@@ -16,7 +16,7 @@
 
 
 #define UCP_REQUEST_FLAGS_FMT \
-    "%c%c%c%c%c%c%c%c%c"
+    "%c%c%c%c%c%c%c%c%c%c"
 
 #define UCP_REQUEST_FLAGS_ARG(_flags) \
     (((_flags) & UCP_REQUEST_FLAG_COMPLETED)       ? 'd' : '-'), \
@@ -27,7 +27,8 @@
     (((_flags) & UCP_REQUEST_FLAG_CALLBACK)        ? 'c' : '-'), \
     (((_flags) & UCP_REQUEST_FLAG_RECV)            ? 'r' : '-'), \
     (((_flags) & UCP_REQUEST_FLAG_SYNC)            ? 's' : '-'), \
-    (((_flags) & UCP_REQUEST_FLAG_RNDV)            ? 'v' : '-')
+    (((_flags) & UCP_REQUEST_FLAG_RNDV)            ? 'v' : '-'), \
+    (((_flags) & UCP_REQUEST_FLAG_RNDV_MRAIL)      ? 'R' : '-')
 
 
 /* defined as a macro to print the call site */
@@ -68,6 +69,7 @@ ucp_request_put(ucp_request_t *req)
 {
     ucs_trace_req("put request %p", req);
     UCS_PROFILE_REQUEST_FREE(req);
+
     ucs_mpool_put_inline(req);
 }
 
@@ -78,6 +80,11 @@ ucp_request_complete_send(ucp_request_t *req, ucs_status_t status)
                   req, req + 1, UCP_REQUEST_FLAGS_ARG(req->flags),
                   ucs_status_string(status));
     UCS_PROFILE_REQUEST_EVENT(req, "complete_send", status);
+
+    if (ucs_unlikely(req->flags & UCP_REQUEST_FLAG_RNDV_MRAIL)) {
+        ucs_mpool_put_inline(req->send.rndv_get.mrail);
+    }
+
     ucp_request_complete(req, send.cb, status);
 }
 
@@ -93,6 +100,11 @@ ucp_request_complete_recv(ucp_request_t *req, ucs_status_t status)
     if (req->flags & UCP_REQUEST_FLAG_BLOCK_OFFLOAD) {
         --req->recv.worker->context->tm.offload.sw_req_count;
     }
+
+    if (ucs_unlikely(req->flags & UCP_REQUEST_FLAG_RNDV_MRAIL)) {
+        ucs_mpool_put_inline(req->send.rndv_get.mrail);
+    }
+
     ucp_request_complete(req, recv.cb, status, &req->recv.info);
 }
 
@@ -321,6 +333,14 @@ static UCS_F_ALWAYS_INLINE void ucp_request_send_tag_stat(ucp_request_t *req)
 }
 
 static UCS_F_ALWAYS_INLINE void
+ucp_request_mrail_create(ucp_request_t *req)
+{
+    ucs_trace_req("mrail create request %p", req);
+    req->send.rndv_get.mrail = (ucp_rndv_get_mrail_t *)ucs_mpool_get_inline(&(req->send.ep->worker)->mrail_mp);
+    req->flags |= UCP_REQUEST_FLAG_RNDV_MRAIL;
+}
+
+static UCS_F_ALWAYS_INLINE void
 ucp_request_clear_rails(ucp_dt_state_t *state) {
     int i;
     for(i = 0; i < UCP_MAX_RAILS; i++) {
@@ -331,8 +351,7 @@ ucp_request_clear_rails(ucp_dt_state_t *state) {
 
 static UCS_F_ALWAYS_INLINE int
 ucp_request_is_empty_rail(ucp_dt_state_t *state, int rail) {
-    return state->dt.mrail[rail].memh == UCT_MEM_HANDLE_NULL ||
-           state->dt.mrail[rail].lane == UCP_NULL_LANE;
+    return state->dt.mrail[rail].lane == UCP_NULL_LANE;
 }
 
 static UCS_F_ALWAYS_INLINE int
