@@ -72,8 +72,8 @@ static size_t ucp_tag_rndv_pack_mrail_rkeys(ucp_request_t *sreq, void *rkey_buf,
     ucp_ep_t        *ep      = sreq->send.ep;
     ucp_dt_state_t  *state   = &sreq->send.state;
     size_t           packet  = 0;
-    int              i;
     int              cnt     = 0;
+    int              i;
     ucp_lane_index_t lane;
 
     ucs_assert(UCP_DT_IS_CONTIG(sreq->send.datatype));
@@ -360,8 +360,8 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_proto_progress_rndv_get_zcopy, (self),
                         ucp_dt_make_contig(1), length);
 
     if ((rndv_req->send.rndv_get.use_mrail) &&
-       ((ucp_request_is_empty_rail(&rndv_req->send.state, rndv_req->send.rndv_get.rail_idx)) ||
-        (rndv_req->send.rndv_get.rail_idx >= UCP_MAX_RAILS))) {
+        ((ucp_request_is_empty_rail(&rndv_req->send.state, rndv_req->send.rndv_get.rail_idx)) ||
+         (rndv_req->send.rndv_get.rail_idx >= UCP_MAX_RAILS))) {
         rndv_req->send.rndv_get.rail_idx = 0;
     }
 
@@ -716,7 +716,7 @@ static void ucp_rndv_prepare_zcopy_send_buffer(ucp_request_t *sreq, ucp_ep_h ep)
         sreq->send.state.dt.contig.memh = UCT_MEM_HANDLE_NULL;
         ucp_request_clear_rails(&sreq->send.state);
     } else if ((ucp_ep_is_rndv_lane_present(ep, 0)) &&
-        (ucp_ep_get_am_lane(ep) != ucp_ep_get_rndv_get_lane(ep, 0))) {
+               (ucp_ep_get_am_lane(ep) != ucp_ep_get_rndv_get_lane(ep, 0))) {
         /* dereg the original send request since we are going to send on the AM lane next */
         ucp_rndv_rma_request_send_buffer_dereg(sreq);
         sreq->send.state.dt.contig.memh = UCT_MEM_HANDLE_NULL;
