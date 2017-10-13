@@ -98,6 +98,10 @@ static ucs_config_field_t ucp_config_table[] = {
    "the eager_zcopy protocol",
    ucs_offsetof(ucp_config_t, ctx.rndv_perf_diff), UCS_CONFIG_TYPE_DOUBLE},
 
+  {"RNDV_MRAIL", "n",
+   "Enable multirail-get rendezvous support",
+   ucs_offsetof(ucp_config_t, ctx.rndv_mrail), UCS_CONFIG_TYPE_BOOL},
+
   {"ZCOPY_THRESH", "auto",
    "Threshold for switching from buffer copy to zero copy protocol",
    ucs_offsetof(ucp_config_t, ctx.zcopy_thresh), UCS_CONFIG_TYPE_MEMUNITS},

@@ -81,10 +81,6 @@ ucp_request_complete_send(ucp_request_t *req, ucs_status_t status)
                   ucs_status_string(status));
     UCS_PROFILE_REQUEST_EVENT(req, "complete_send", status);
 
-    if (ucs_unlikely(req->flags & UCP_REQUEST_FLAG_RNDV_MRAIL)) {
-        ucs_mpool_put_inline(req->send.rndv_get.mrail);
-    }
-
     ucp_request_complete(req, send.cb, status);
 }
 
@@ -99,10 +95,6 @@ ucp_request_complete_recv(ucp_request_t *req, ucs_status_t status)
     UCS_PROFILE_REQUEST_EVENT(req, "complete_recv", status);
     if (req->flags & UCP_REQUEST_FLAG_BLOCK_OFFLOAD) {
         --req->recv.worker->context->tm.offload.sw_req_count;
-    }
-
-    if (ucs_unlikely(req->flags & UCP_REQUEST_FLAG_RNDV_MRAIL)) {
-        ucs_mpool_put_inline(req->send.rndv_get.mrail);
     }
 
     ucp_request_complete(req, recv.cb, status, &req->recv.info);
@@ -341,6 +333,14 @@ ucp_request_mrail_create(ucp_request_t *req)
 }
 
 static UCS_F_ALWAYS_INLINE void
+ucp_request_mrail_release(ucp_request_t *req)
+{
+    ucs_trace_req("mrail release request %p", req);
+    ucs_mpool_put_inline(req->send.rndv_get.mrail);
+    req->flags &= ~UCP_REQUEST_FLAG_RNDV_MRAIL;
+}
+
+static UCS_F_ALWAYS_INLINE void
 ucp_request_clear_rails(ucp_dt_state_t *state) {
     int i;
     for(i = 0; i < UCP_MAX_RAILS; i++) {
@@ -372,7 +372,7 @@ static inline int ucp_request_mrail_reg(ucp_request_t *req)
 
     ucp_request_clear_rails(state);
 
-    for (i = 0; ucp_ep_is_rndv_lane_present(ep, i) && i < UCP_MAX_RAILS; i++) {
+    for (i = 0; i < UCP_MAX_RAILS && ucp_ep_is_rndv_lane_present(ep, i); i++) {
         lane = ucp_ep_get_rndv_get_lane(ep, i);
 
         if (ucp_ep_rndv_md_flags(ep, lane) & UCT_MD_FLAG_NEED_RKEY) {

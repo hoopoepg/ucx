@@ -109,7 +109,7 @@ static void ucp_tag_rndv_unpack_mrail_rkeys(ucp_request_t *req, void *rkey_buf)
 
     ucp_request_mrail_create(req);
 
-    for (i = 0; ucp_ep_is_rndv_lane_present(ep, i) && i < UCP_MAX_RAILS; i++) {
+    for (i = 0; i < UCP_MAX_RAILS && ucp_ep_is_rndv_lane_present(ep, i); i++) {
         lane = ucp_ep_get_rndv_get_lane(ep, i);
         if (ucp_ep_rndv_md_flags(ep, lane) & UCT_MD_FLAG_NEED_RKEY) {
             UCS_PROFILE_CALL(uct_rkey_unpack, rkey_buf + packet,
@@ -118,8 +118,6 @@ static void ucp_tag_rndv_unpack_mrail_rkeys(ucp_request_t *req, void *rkey_buf)
             packet += ucp_ep_md_attr(ep, lane)->rkey_packed_size;
         }
     }
-
-    req->flags |= UCP_REQUEST_FLAG_RNDV_MRAIL;
 }
 
 static size_t ucp_tag_rndv_rts_pack(void *dest, void *arg)
@@ -404,6 +402,10 @@ UCS_PROFILE_FUNC_VOID(ucp_rndv_get_completion, (self, status),
 {
     ucp_request_t *rndv_req = ucs_container_of(self, ucp_request_t,
                                                send.uct_comp);
+
+    if (rndv_req->flags & UCP_REQUEST_FLAG_RNDV_MRAIL) {
+        ucp_request_mrail_release(rndv_req);
+    }
 
     if (rndv_req->send.state.offset == rndv_req->send.length) {
         ucs_trace_req("completed rndv get operation rndv_req: %p", rndv_req);
