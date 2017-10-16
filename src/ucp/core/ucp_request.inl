@@ -327,9 +327,15 @@ static UCS_F_ALWAYS_INLINE void ucp_request_send_tag_stat(ucp_request_t *req)
 static UCS_F_ALWAYS_INLINE void
 ucp_request_mrail_create(ucp_request_t *req)
 {
+    int i;
+
     ucs_trace_req("mrail create request %p", req);
     req->send.rndv_get.mrail = (ucp_rndv_get_mrail_t *)ucs_mpool_get_inline(&(req->send.ep->worker)->mrail_mp);
     req->flags |= UCP_REQUEST_FLAG_RNDV_MRAIL;
+
+    for(i = 0; i < ucs_static_array_size(req->send.rndv_get.mrail->rail); i++) {
+        req->send.rndv_get.mrail->rail[i].rkey_bundle.rkey = UCT_INVALID_RKEY;
+    }
 }
 
 static UCS_F_ALWAYS_INLINE void

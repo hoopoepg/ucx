@@ -28,6 +28,34 @@ static int ucp_tag_rndv_is_get_op_possible(ucp_ep_h ep, ucp_lane_index_t lane,
     }
 }
 
+static int ucp_tag_rndv_is_mrail_get_op_possible(ucp_ep_h ep, ucp_request_t *req)
+{
+    uint64_t md_flags;
+    int i;
+    ucp_lane_index_t lane;
+
+    ucs_assert(!ucp_ep_is_stub(ep));
+
+    if (!ucp_ep_is_rndv_mrail_present(ep)) {
+        return 0;
+    }
+
+    if (!req->send.rndv_get.mrail) {
+        return 0;
+    }
+
+    for (i = 0; i < UCP_MAX_RAILS && ucp_ep_is_rndv_lane_present(ep, i); i++) {
+        lane = ucp_ep_get_rndv_get_lane(ep, i);
+        md_flags = ucp_ep_md_attr(ep, lane)->cap.flags;
+        uct_rkey_t rkey = req->send.rndv_get.mrail->rail[i].rkey_bundle.rkey;
+        if ((md_flags & UCT_MD_FLAG_REG) && (rkey == UCT_INVALID_RKEY)) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 static void ucp_rndv_rma_request_send_buffer_dereg(ucp_request_t *sreq)
 {
     /*
@@ -233,6 +261,7 @@ static void ucp_rndv_send_ats(ucp_request_t *rndv_req, uintptr_t remote_request)
 static void ucp_rndv_complete_rndv_get(ucp_request_t *rndv_req)
 {
     ucp_request_t *rreq = rndv_req->send.rndv_get.rreq;
+    int i;
 
     ucs_assertv(rndv_req->send.state.offset == rndv_req->send.length,
                 "rndv_req=%p offset=%zu length=%zu", rndv_req,
@@ -245,6 +274,14 @@ static void ucp_rndv_complete_rndv_get(ucp_request_t *rndv_req)
 
     if (rndv_req->send.rndv_get.rkey_bundle.rkey != UCT_INVALID_RKEY) {
         uct_rkey_release(&rndv_req->send.rndv_get.rkey_bundle);
+    }
+
+    if (rndv_req->send.rndv_get.mrail) {
+        for(i = 0; i < ucs_static_array_size(rndv_req->send.rndv_get.mrail->rail); i++) {
+            if (rndv_req->send.rndv_get.mrail->rail[i].rkey_bundle.rkey != UCT_INVALID_RKEY) {
+                uct_rkey_release(&rndv_req->send.rndv_get.mrail->rail[i].rkey_bundle);
+            }
+        }
     }
 
     ucp_rndv_rma_request_send_buffer_dereg(rndv_req);
@@ -311,7 +348,7 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_proto_progress_rndv_get_zcopy, (self),
 
     if (!(ucp_tag_rndv_is_get_op_possible(rndv_req->send.ep, rndv_req->send.lane,
                                           rndv_req->send.rndv_get.rkey_bundle.rkey)) &&
-        !(rndv_req->send.rndv_get.mrail)) {
+        !(ucp_tag_rndv_is_mrail_get_op_possible(rndv_req->send.ep, rndv_req))) {
         /* can't perform get_zcopy - switch to AM rndv */
         if (rndv_req->send.rndv_get.rkey_bundle.rkey != UCT_INVALID_RKEY) {
             uct_rkey_release(&rndv_req->send.rndv_get.rkey_bundle);
