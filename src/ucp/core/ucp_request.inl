@@ -328,12 +328,15 @@ static UCS_F_ALWAYS_INLINE void
 ucp_request_mrail_create(ucp_request_t *req)
 {
     int i;
+    ucp_rndv_get_mrail_t *mrail;
 
     ucs_trace_req("mrail create request %p", req);
     req->send.rndv_get.mrail = (ucp_rndv_get_mrail_t *)ucs_mpool_get_inline(&(req->send.ep->worker)->mrail_mp);
     req->flags |= UCP_REQUEST_FLAG_RNDV_MRAIL;
 
-    for(i = 0; i < ucs_static_array_size(req->send.rndv_get.mrail->rail); i++) {
+    mrail = req->send.rndv_get.mrail;
+
+    for(i = 0; i < sizeof(mrail->rail) / sizeof(mrail->rail[0]); i++) {
         req->send.rndv_get.mrail->rail[i].rkey_bundle.rkey = UCT_INVALID_RKEY;
     }
 }

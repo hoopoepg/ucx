@@ -262,6 +262,7 @@ static void ucp_rndv_complete_rndv_get(ucp_request_t *rndv_req)
 {
     ucp_request_t *rreq = rndv_req->send.rndv_get.rreq;
     int i;
+    ucp_rndv_get_mrail_t *mrail;
 
     ucs_assertv(rndv_req->send.state.offset == rndv_req->send.length,
                 "rndv_req=%p offset=%zu length=%zu", rndv_req,
@@ -277,7 +278,8 @@ static void ucp_rndv_complete_rndv_get(ucp_request_t *rndv_req)
     }
 
     if (rndv_req->send.rndv_get.mrail) {
-        for(i = 0; i < ucs_static_array_size(rndv_req->send.rndv_get.mrail->rail); i++) {
+        mrail = rndv_req->send.rndv_get.mrail;
+        for(i = 0; i < sizeof(mrail->rail) / sizeof(mrail->rail[0]); i++) {
             if (rndv_req->send.rndv_get.mrail->rail[i].rkey_bundle.rkey != UCT_INVALID_RKEY) {
                 uct_rkey_release(&rndv_req->send.rndv_get.mrail->rail[i].rkey_bundle);
             }
