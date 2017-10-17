@@ -200,36 +200,6 @@ ucp_request_send_state_init(ucp_request_t *req, size_t dt_count)
     }
 }
 
-static UCS_F_ALWAYS_INLINE void
-ucp_request_send_state_reset(ucp_request_t *req,
-                             uct_completion_callback_t comp_cb, unsigned proto)
-{
-    switch (proto) {
-    case UCP_REQUEST_SEND_PROTO_RMA:
-        ucs_assert(UCP_DT_IS_CONTIG(req->send.datatype));
-        /* Fall through */
-    case UCP_REQUEST_SEND_PROTO_RNDV_GET:
-        if (UCP_DT_IS_CONTIG(req->send.datatype)) {
-            req->send.state.dt.contig.memh = UCT_MEM_HANDLE_NULL;
-            ucp_request_clear_rails(&req->send.state);
-        }
-        /* Fall through */
-    case UCP_REQUEST_SEND_PROTO_ZCOPY_AM:
-        req->send.uct_comp.func       = comp_cb;
-        req->send.uct_comp.count      = 0;
-        /* Fall through */
-    case UCP_REQUEST_SEND_PROTO_BCOPY_AM:
-        req->send.state.offset           = 0;
-        break;
-    default:
-        ucs_fatal("unknown protocol");
-    }
-
-    /* offset is not used for RMA */
-    ucs_assert((proto == UCP_REQUEST_SEND_PROTO_RMA) ||
-               (req->send.state.offset <= req->send.length));
-}
-
 /**
  * Advance state of send request after UCT operation. This function applies
  * @a new_dt_state to @a req request according to @a proto protocol. Also, UCT
@@ -410,6 +380,36 @@ static inline void ucp_request_mrail_dereg(ucp_request_t *req)
     }
 
     ucp_request_clear_rails(state);
+}
+
+static UCS_F_ALWAYS_INLINE void
+ucp_request_send_state_reset(ucp_request_t *req,
+                             uct_completion_callback_t comp_cb, unsigned proto)
+{
+    switch (proto) {
+    case UCP_REQUEST_SEND_PROTO_RMA:
+        ucs_assert(UCP_DT_IS_CONTIG(req->send.datatype));
+        /* Fall through */
+    case UCP_REQUEST_SEND_PROTO_RNDV_GET:
+        if (UCP_DT_IS_CONTIG(req->send.datatype)) {
+            req->send.state.dt.contig.memh = UCT_MEM_HANDLE_NULL;
+            ucp_request_clear_rails(&req->send.state);
+        }
+        /* Fall through */
+    case UCP_REQUEST_SEND_PROTO_ZCOPY_AM:
+        req->send.uct_comp.func       = comp_cb;
+        req->send.uct_comp.count      = 0;
+        /* Fall through */
+    case UCP_REQUEST_SEND_PROTO_BCOPY_AM:
+        req->send.state.offset           = 0;
+        break;
+    default:
+        ucs_fatal("unknown protocol");
+    }
+
+    /* offset is not used for RMA */
+    ucs_assert((proto == UCP_REQUEST_SEND_PROTO_RMA) ||
+               (req->send.state.offset <= req->send.length));
 }
 
 
