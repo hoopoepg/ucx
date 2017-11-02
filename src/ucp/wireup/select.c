@@ -16,12 +16,11 @@
 #define UCP_WIREUP_RNDV_TEST_MSG_SIZE       262144
 
 enum {
-    UCP_WIREUP_LANE_USAGE_AM         = UCS_BIT(0),
-    UCP_WIREUP_LANE_USAGE_RMA        = UCS_BIT(1),
-    UCP_WIREUP_LANE_USAGE_AMO        = UCS_BIT(2),
-    UCP_WIREUP_LANE_USAGE_RNDV       = UCS_BIT(3),
-    UCP_WIREUP_LANE_USAGE_TAG        = UCS_BIT(4),
-    UCP_WIREUP_LANE_USAGE_RNDV_MRAIL = UCS_BIT(5)
+    UCP_WIREUP_LANE_USAGE_AM   = UCS_BIT(0),
+    UCP_WIREUP_LANE_USAGE_RMA  = UCS_BIT(1),
+    UCP_WIREUP_LANE_USAGE_AMO  = UCS_BIT(2),
+    UCP_WIREUP_LANE_USAGE_RNDV = UCS_BIT(3),
+    UCP_WIREUP_LANE_USAGE_TAG  = UCS_BIT(4)
 };
 
 
@@ -468,35 +467,19 @@ ucp_wireup_add_memaccess_lanes(ucp_ep_h ep, unsigned address_count,
     dst_md_index = address_list_copy[addr_index].md_index;
     reg_score    = score;
 
-    if (!(usage & UCP_WIREUP_LANE_USAGE_RNDV_MRAIL)) {
-        /* Select additional transports which can access allocated memory, but only
-         * if their scores are better. We need this because a remote memory block can
-         * be potentially allocated using one of them, and we might get better performance
-         * than the transports which support only registered remote memory.
-         */
-        snprintf(title, sizeof(title), criteria->title, "allocated");
-        mem_criteria.title           = title;
-        mem_criteria.remote_md_flags = UCT_MD_FLAG_ALLOC;
-    } else {
-        tl_bitmap = ucp_wireup_unset_tl_by_md(ep, tl_bitmap, rsc_index);
-
-        if (strstr(ep->worker->context->tl_rscs[rsc_index].tl_rsc.tl_name, "ugni")) {
-            /* a temporary workaround to prevent the ugni uct from using rndv */
-            goto out_free_address_list;
-        }
-    }
+    /* Select additional transports which can access allocated memory, but only
+     * if their scores are better. We need this because a remote memory block can
+     * be potentially allocated using one of them, and we might get better performance
+     * than the transports which support only registered remote memory.
+     */
+    snprintf(title, sizeof(title), criteria->title, "allocated");
+    mem_criteria.title           = title;
+    mem_criteria.remote_md_flags = UCT_MD_FLAG_ALLOC;
 
     /* Add to the list of lanes and remove all occurrences of the remote md
      * from the address list, to avoid selecting the same remote md again.*/
     ucp_wireup_add_lane_desc(lane_descs, num_lanes_p, rsc_index, addr_index,
                              dst_md_index, score, usage, 0);
-
-    /* In case if selected SHM transport - leave it alone, disable multirail */
-    if((usage & UCP_WIREUP_LANE_USAGE_RNDV_MRAIL) &&
-       (ep->worker->context->tl_rscs[rsc_index].tl_rsc.dev_type == UCT_DEVICE_TYPE_SHM)) {
-        goto out_free_address_list;
-    }
-
 
     remote_md_map &= ~UCS_BIT(dst_md_index);
 
@@ -504,8 +487,7 @@ ucp_wireup_add_memaccess_lanes(ucp_ep_h ep, unsigned address_count,
         status = ucp_wireup_select_transport(ep, address_list_copy, address_count,
                                              &mem_criteria, tl_bitmap, remote_md_map,
                                              0, &rsc_index, &addr_index, &score);
-        if ((status != UCS_OK) ||
-            ((score <= reg_score) && !(usage & UCP_WIREUP_LANE_USAGE_RNDV_MRAIL))) {
+        if ((status != UCS_OK) || (score <= reg_score)) {
             break;
         }
 
@@ -514,10 +496,6 @@ ucp_wireup_add_memaccess_lanes(ucp_ep_h ep, unsigned address_count,
         ucp_wireup_add_lane_desc(lane_descs, num_lanes_p, rsc_index, addr_index,
                                  dst_md_index, score, usage, 0);
         remote_md_map &= ~UCS_BIT(dst_md_index);
-
-        if (usage & UCP_WIREUP_LANE_USAGE_RNDV_MRAIL) {
-            tl_bitmap = ucp_wireup_unset_tl_by_md(ep, tl_bitmap, rsc_index);
-        }
     }
 
     status = UCS_OK;
@@ -814,11 +792,17 @@ static ucs_status_t ucp_wireup_add_rndv_lanes(ucp_ep_h ep,
                                               unsigned address_count,
                                               const ucp_address_entry_t *address_list,
                                               ucp_wireup_lane_desc_t *lane_descs,
-                                              ucp_lane_index_t *num_lanes_p)
+                                              ucp_lane_index_t *num_lanes_p,
+                                              ucp_lane_index_t *num_rndv_lanes_p)
 {
+    ucs_status_t status         = UCS_OK;
+    uint64_t tl_bitmap          = -1;
+    uint64_t remote_md_map      = -1;
+    ucp_lane_index_t rndv_lanes = 0;
+    ucp_lane_index_t max_lanes;
     ucp_wireup_criteria_t criteria;
     ucp_rsc_index_t rsc_index;
-    ucs_status_t status;
+    ucp_rsc_index_t dst_md_index;
     unsigned addr_index;
     double score;
 
@@ -840,26 +824,47 @@ static ucs_status_t ucp_wireup_add_rndv_lanes(ucp_ep_h ep,
         criteria.local_iface_flags |= UCP_WORKER_UCT_UNSIG_EVENT_CAP_FLAGS;
     }
 
-    if (!(ep->worker->context->config.ext.max_rndv_lanes > 1) ||
-        ((params->field_mask & UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE) &&
-         (params->err_mode == UCP_ERR_HANDLING_MODE_PEER))){
-        status = ucp_wireup_select_transport(ep, address_list, address_count, &criteria,
-                                             -1, -1, 0, &rsc_index, &addr_index, &score);
-        if ((status == UCS_OK) &&
-            /* a temporary workaround to prevent the ugni uct from using rndv */
-            (strstr(ep->worker->context->tl_rscs[rsc_index].tl_rsc.tl_name, "ugni") == NULL)) {
-             ucp_wireup_add_lane_desc(lane_descs, num_lanes_p, rsc_index, addr_index,
-                                     address_list[addr_index].md_index, score,
-                                     UCP_WIREUP_LANE_USAGE_RNDV, 0);
-        }
-        return status;
+    if ((params->field_mask & UCP_EP_PARAM_FIELD_ERR_HANDLING_MODE) &&
+        (params->err_mode == UCP_ERR_HANDLING_MODE_PEER)) {
+        max_lanes = ucs_min(1, ep->worker->context->config.ext.max_rndv_lanes);
     } else {
-        return ucp_wireup_add_memaccess_lanes(ep, address_count, address_list,
-                                              lane_descs, num_lanes_p, &criteria,
-                                              -1,
-                                              UCP_WIREUP_LANE_USAGE_RNDV |
-                                              UCP_WIREUP_LANE_USAGE_RNDV_MRAIL);
+        max_lanes = ep->worker->context->config.ext.max_rndv_lanes;
     }
+
+    while (rndv_lanes < max_lanes) {
+        status = ucp_wireup_select_transport(ep, address_list, address_count, &criteria,
+                                             tl_bitmap, remote_md_map, 0,
+                                             &rsc_index, &addr_index, &score);
+        if ((status == UCS_OK)) {
+            /* Add lane description and remove all occurrences of the remote md */
+            dst_md_index = address_list[addr_index].md_index;
+            remote_md_map &= ~UCS_BIT(dst_md_index);
+            tl_bitmap = ucp_wireup_unset_tl_by_md(ep, tl_bitmap, rsc_index);
+
+            if ((strstr(ep->worker->context->tl_rscs[rsc_index].tl_rsc.tl_name, "ugni") != NULL)) {
+                /* a temporary workaround to prevent the ugni uct from using rndv */
+                continue;
+            }
+
+            rndv_lanes++;
+
+            ucp_wireup_add_lane_desc(lane_descs, num_lanes_p, rsc_index, addr_index,
+                                     dst_md_index, score,
+                                     UCP_WIREUP_LANE_USAGE_RNDV, 0);
+            if (ep->worker->context->tl_rscs[rsc_index].tl_rsc.dev_type == UCT_DEVICE_TYPE_SHM) {
+                /* In case if selected SHM transport - leave it alone, disable multirail */
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    *num_rndv_lanes_p = rndv_lanes;
+
+    ucs_trace_func("rendezvous: configured lanes: %d", (int)rndv_lanes);
+
+    return status;
 }
 
 /* Lane for transport offloaded tag interface */
@@ -993,7 +998,7 @@ ucs_status_t ucp_wireup_select_lanes(ucp_ep_h ep, const ucp_ep_params_t *params,
     }
 
     status = ucp_wireup_add_rndv_lanes(ep, params, address_count, address_list,
-                                       lane_descs, &key->num_lanes);
+                                       lane_descs, &key->num_lanes, &key->num_rndv_lanes);
     if (status != UCS_OK) {
         return status;
     }

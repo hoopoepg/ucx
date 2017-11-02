@@ -80,9 +80,13 @@ enum {
 
 /**
  * Multirail rendezvous-get info.
+ * In regular rndv-get way there is always number of rkeys
+ * is equal to rndv lanes, but in case if tag offloading is
+ * available - only one rkey is proceeded
  */
 typedef struct ucp_rndv_get_rkey {
-    ucp_lane_index_t  rail_idx;
+    ucp_lane_index_t  lane_num; /* number of rkeys obtained from peer */
+    ucp_lane_index_t  lane_idx;
     uct_rkey_bundle_t rkey_bundle[UCP_MAX_RAILS];
 } ucp_rndv_get_rkey_t;
 

@@ -27,10 +27,7 @@ typedef struct ucp_dt_state {
         union {
             struct {
                 uct_mem_h         memh;
-            } contig;
-            struct {
-                uct_mem_h         memh;
-            } mrail[UCP_MAX_RAILS];
+            } contig[UCP_MAX_RAILS];
         };
         struct {
             size_t                iov_offset;     /* Offset in the IOV item */
@@ -130,14 +127,14 @@ ucp_dt_clear_rails(ucp_dt_state_t *state)
 {
     int i;
     for (i = 0; i < UCP_MAX_RAILS; i++) {
-        state->dt.mrail[i].memh = UCT_MEM_HANDLE_NULL;
+        state->dt.contig[i].memh = UCT_MEM_HANDLE_NULL;
     }
 }
 
 static UCS_F_ALWAYS_INLINE int
 ucp_dt_is_empty_rail(ucp_dt_state_t *state, int rail)
 {
-    return state->dt.mrail[rail].memh == UCT_MEM_HANDLE_NULL;
+    return state->dt.contig[rail].memh == UCT_MEM_HANDLE_NULL;
 }
 
 static UCS_F_ALWAYS_INLINE int

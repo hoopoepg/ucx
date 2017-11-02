@@ -322,6 +322,12 @@ static UCS_F_ALWAYS_INLINE void ucp_request_send_tag_stat(ucp_request_t *req)
     }
 }
 
+static UCS_F_ALWAYS_INLINE
+uct_rkey_bundle_t *ucp_tag_rndv_rkey(ucp_request_t *req, int idx)
+{
+    return &req->send.rndv_get.rkey->rkey_bundle[idx];
+}
+
 static UCS_F_ALWAYS_INLINE void
 ucp_request_rndv_get_create(ucp_request_t *req)
 {
@@ -331,15 +337,12 @@ ucp_request_rndv_get_create(ucp_request_t *req)
     req->send.rndv_get.rkey = ucs_mpool_get_inline(&(req->send.ep->worker)->rndv_get_mp);
     ucs_assert_always(req->send.rndv_get.rkey != NULL);
 
-    for (i = 0; i < UCP_MAX_RAILS; i++) {
-        req->send.rndv_get.rkey->rkey_bundle[i].rkey = UCT_INVALID_RKEY;
-    }
-}
+    req->send.rndv_get.rkey->lane_idx = 0;
+    req->send.rndv_get.rkey->lane_num = 0;
 
-static UCS_F_ALWAYS_INLINE
-uct_rkey_bundle_t *ucp_tag_rndv_rkey(ucp_request_t *req, int idx)
-{
-    return &req->send.rndv_get.rkey->rkey_bundle[idx];
+    for (i = 0; i < UCP_MAX_RAILS; i++) {
+        ucp_tag_rndv_rkey(req, i)->rkey = UCT_INVALID_RKEY;
+    }
 }
 
 static UCS_F_ALWAYS_INLINE void

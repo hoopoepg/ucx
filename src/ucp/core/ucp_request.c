@@ -198,7 +198,7 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_request_memory_reg,
     switch (datatype & UCP_DATATYPE_CLASS_MASK) {
     case UCP_DATATYPE_CONTIG:
         status = uct_md_mem_reg(uct_md, buffer, length, UCT_MD_MEM_ACCESS_RMA,
-                                &state->dt.contig.memh);
+                                &state->dt.contig[0].memh);
         break;
     case UCP_DATATYPE_IOV:
         iovcnt = state->dt.iov.iovcnt;
@@ -252,9 +252,9 @@ UCS_PROFILE_FUNC_VOID(ucp_request_memory_dereg,
 
     switch (datatype & UCP_DATATYPE_CLASS_MASK) {
     case UCP_DATATYPE_CONTIG:
-        if (state->dt.contig.memh != UCT_MEM_HANDLE_NULL) {
-            uct_md_mem_dereg(uct_md, state->dt.contig.memh);
-            state->dt.contig.memh = UCT_MEM_HANDLE_NULL;
+        if (state->dt.contig[0].memh != UCT_MEM_HANDLE_NULL) {
+            uct_md_mem_dereg(uct_md, state->dt.contig[0].memh);
+            state->dt.contig[0].memh = UCT_MEM_HANDLE_NULL;
         }
         break;
     case UCP_DATATYPE_IOV:
@@ -372,7 +372,7 @@ int ucp_request_mrail_reg(ucp_request_t *req)
         if (ucp_ep_rndv_md_flags(ep, i) & UCT_MD_FLAG_NEED_RKEY) {
             status = uct_md_mem_reg(ucp_ep_md(ep, lane),
                                     (void *)req->send.buffer, req->send.length,
-                                    UCT_MD_MEM_ACCESS_RMA, &state->dt.mrail[i].memh);
+                                    UCT_MD_MEM_ACCESS_RMA, &state->dt.contig[i].memh);
             ucs_assert_always(status == UCS_OK);
             cnt++;
         }
@@ -388,14 +388,15 @@ void ucp_request_mrail_dereg(ucp_request_t *req)
     int              i;
 
     for (i = 0; i < UCP_MAX_RAILS; i++) {
-        if (state->dt.mrail[i].memh != UCT_MEM_HANDLE_NULL) {
+        if (state->dt.contig[i].memh != UCT_MEM_HANDLE_NULL) {
             status = uct_md_mem_dereg(ucp_ep_md(req->send.ep,
                                                 ucp_ep_get_rndv_get_lane(req->send.ep, i)),
-                                      state->dt.mrail[i].memh);
+                                      state->dt.contig[i].memh);
             ucs_assert_always(status == UCS_OK);
         }
     }
 
+    req->send.reg_rsc = UCP_NULL_RESOURCE;
     ucp_dt_clear_rails(state);
 }
 
