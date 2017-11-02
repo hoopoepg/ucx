@@ -400,12 +400,6 @@ static int ucp_wireup_compare_lane_amo_score(const void *elem1, const void *elem
     return UCP_WIREUP_COMPARE_SCORE(elem1, elem2, arg, amo);
 }
 
-static int ucp_wireup_compare_lane_rndv_score(const void *elem1, const void *elem2,
-                                              void *arg)
-{
-    return UCP_WIREUP_COMPARE_SCORE(elem1, elem2, arg, rndv);
-}
-
 static uint64_t ucp_wireup_unset_tl_by_md(ucp_ep_h ep, uint64_t tl_bitmap,
                                           ucp_rsc_index_t rsc_index)
 {
@@ -828,7 +822,7 @@ static ucs_status_t ucp_wireup_add_rndv_lanes(ucp_ep_h ep,
         (params->err_mode == UCP_ERR_HANDLING_MODE_PEER)) {
         max_lanes = ucs_min(1, ep->worker->context->config.ext.max_rndv_lanes);
     } else {
-        max_lanes = ep->worker->context->config.ext.max_rndv_lanes;
+        max_lanes = ucs_min(UCP_MAX_RAILS, ep->worker->context->config.ext.max_rndv_lanes);
     }
 
     while (rndv_lanes < max_lanes) {
@@ -864,7 +858,7 @@ static ucs_status_t ucp_wireup_add_rndv_lanes(ucp_ep_h ep,
 
     ucs_trace_func("rendezvous: configured lanes: %d", (int)rndv_lanes);
 
-    return status;
+    return UCS_OK;
 }
 
 /* Lane for transport offloaded tag interface */
@@ -967,7 +961,8 @@ ucs_status_t ucp_wireup_select_lanes(ucp_ep_h ep, const ucp_ep_params_t *params,
                                      uint8_t *addr_indices,
                                      ucp_ep_config_key_t *key)
 {
-    ucp_worker_h worker = ep->worker;
+    ucp_worker_h worker        = ep->worker;
+    ucp_lane_index_t rndv_lane = 0;
     ucp_wireup_lane_desc_t lane_descs[UCP_MAX_LANES];
     ucp_lane_index_t lane;
     ucs_status_t status;
@@ -1034,7 +1029,8 @@ ucs_status_t ucp_wireup_select_lanes(ucp_ep_h ep, const ucp_ep_params_t *params,
             key->am_lane = lane;
         }
         if (lane_descs[lane].usage & UCP_WIREUP_LANE_USAGE_RNDV) {
-            key->rndv_lanes[lane] = lane;
+            key->rndv_lanes[rndv_lane] = lane;
+            rndv_lane++;
         }
         if (lane_descs[lane].usage & UCP_WIREUP_LANE_USAGE_RMA) {
             key->rma_lanes[lane] = lane;
@@ -1053,8 +1049,8 @@ ucs_status_t ucp_wireup_select_lanes(ucp_ep_h ep, const ucp_ep_params_t *params,
                 ucp_wireup_compare_lane_rma_score, lane_descs);
     ucs_qsort_r(key->amo_lanes, UCP_MAX_LANES, sizeof(ucp_lane_index_t),
                 ucp_wireup_compare_lane_amo_score, lane_descs);
-    ucs_qsort_r(key->rndv_lanes, UCP_MAX_LANES, sizeof(ucp_lane_index_t),
-                ucp_wireup_compare_lane_rndv_score, lane_descs);
+
+    /* Do not sort rndv lanes to save original sequence */
 
     /* Get all reachable MDs from full remote address list */
     key->reachable_md_map = ucp_wireup_get_reachable_mds(worker, address_count,
@@ -1065,15 +1061,6 @@ ucs_status_t ucp_wireup_select_lanes(ucp_ep_h ep, const ucp_ep_params_t *params,
                                                           address_list,
                                                           lane_descs,
                                                           key->num_lanes);
-    /* Cut slowest rndv lanes by configuration value */
-    for (lane = ep->worker->context->config.ext.max_rndv_lanes; lane < UCP_MAX_RAILS; lane++) {
-        key->rndv_lanes[lane] = UCP_NULL_LANE;
-    }
-
-    for (key->num_rndv_lanes = 0;
-         key->num_rndv_lanes < UCP_MAX_LANES &&
-         key->rndv_lanes[key->num_rndv_lanes] != UCP_NULL_LANE;
-         key->num_rndv_lanes++) {}
 
     return UCS_OK;
 }

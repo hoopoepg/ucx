@@ -709,15 +709,9 @@ static void ucp_rndv_prepare_zcopy_send_buffer(ucp_request_t *sreq, ucp_ep_h ep)
     if ((sreq->flags & UCP_REQUEST_FLAG_OFFLOADED) &&
         (ucp_ep_get_am_lane(ep) != ucp_ep_get_tag_lane(ep))) {
         ucp_request_send_buffer_dereg(sreq, ucp_ep_get_tag_lane(sreq->send.ep));
-        ucp_dt_clear_rails(&sreq->send.state.dt);
-    } else if ((ucp_ep_is_rndv_lane_present(ep, 0)) &&
-               (ucp_ep_get_am_lane(ep) != ucp_ep_get_rndv_get_lane(ep, 0))) {
+    } else {
         /* dereg the original send request since we are going to send on the AM lane next */
         ucp_rndv_rma_request_send_buffer_dereg(sreq);
-        ucp_dt_clear_rails(&sreq->send.state.dt);
-    } else if (ucp_dt_have_rails(&sreq->send.state.dt)) {
-        ucp_rndv_rma_request_send_buffer_dereg(sreq);
-        ucp_dt_clear_rails(&sreq->send.state.dt);
     }
     if (sreq->send.state.dt.dt.contig[0].memh == UCT_MEM_HANDLE_NULL) {
         /* register the send buffer for the zcopy operation */
