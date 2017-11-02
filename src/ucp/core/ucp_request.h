@@ -36,7 +36,6 @@ enum {
     UCP_REQUEST_FLAG_RNDV                 = UCS_BIT(9),
     UCP_REQUEST_FLAG_OFFLOADED            = UCS_BIT(10),
     UCP_REQUEST_FLAG_BLOCK_OFFLOAD        = UCS_BIT(11),
-    UCP_REQUEST_FLAG_RNDV_MRAIL           = UCS_BIT(12),
 
 #if ENABLE_ASSERT
     UCP_REQUEST_DEBUG_FLAG_EXTERNAL       = UCS_BIT(15)
@@ -127,10 +126,10 @@ struct ucp_request {
                 } proxy;
 
                 struct {
-                    uint64_t                  remote_address; /* address of the sender's data buffer */
-                    uintptr_t                 remote_request; /* pointer to the sender's send request */
-                    ucp_request_t            *rreq;           /* receive request on the recv side */
-                    struct ucp_rndv_get_rkey *rkey;           /* rendezvous-get remote keys */
+                    uint64_t             remote_address; /* address of the sender's data buffer */
+                    uintptr_t            remote_request; /* pointer to the sender's send request */
+                    ucp_request_t       *rreq;           /* receive request on the recv side */
+                    ucp_rndv_get_rkey_t *rkey;           /* rendezvous-get remote keys */
                 } rndv_get;
 
                 struct {

@@ -137,8 +137,8 @@ ucs_mpool_ops_t ucp_request_mpool_ops = {
 };
 
 ucs_mpool_ops_t ucp_rndv_get_mpool_ops = {
-    .chunk_alloc   = ucs_mpool_hugetlb_malloc,
-    .chunk_release = ucs_mpool_hugetlb_free,
+    .chunk_alloc   = ucs_mpool_chunk_malloc,
+    .chunk_release = ucs_mpool_chunk_free,
     .obj_init      = NULL,
     .obj_cleanup   = NULL
 };
@@ -364,7 +364,7 @@ int ucp_request_mrail_reg(ucp_request_t *req)
 
     ucs_assert(UCP_DT_IS_CONTIG(req->send.datatype));
 
-    ucp_request_clear_rails(state);
+    ucp_dt_clear_rails(state);
 
     for (i = 0; i < ucp_ep_rndv_num_lanes(ep); i++) {
         lane = ucp_ep_get_rndv_get_lane(ep, i);
@@ -387,7 +387,7 @@ void ucp_request_mrail_dereg(ucp_request_t *req)
     ucs_status_t     status;
     int              i;
 
-    for (i = 0; i < ucs_countof(state->dt.mrail); i++) {
+    for (i = 0; i < UCP_MAX_RAILS; i++) {
         if (state->dt.mrail[i].memh != UCT_MEM_HANDLE_NULL) {
             status = uct_md_mem_dereg(ucp_ep_md(req->send.ep,
                                                 ucp_ep_get_rndv_get_lane(req->send.ep, i)),
@@ -396,7 +396,7 @@ void ucp_request_mrail_dereg(ucp_request_t *req)
         }
     }
 
-    ucp_request_clear_rails(state);
+    ucp_dt_clear_rails(state);
 }
 
 

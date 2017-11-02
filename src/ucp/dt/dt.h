@@ -125,4 +125,25 @@ ucp_dt_unpack(ucp_datatype_t datatype, void *buffer, size_t buffer_size,
     }
 }
 
+static UCS_F_ALWAYS_INLINE void
+ucp_dt_clear_rails(ucp_dt_state_t *state)
+{
+    int i;
+    for (i = 0; i < UCP_MAX_RAILS; i++) {
+        state->dt.mrail[i].memh = UCT_MEM_HANDLE_NULL;
+    }
+}
+
+static UCS_F_ALWAYS_INLINE int
+ucp_dt_is_empty_rail(ucp_dt_state_t *state, int rail)
+{
+    return state->dt.mrail[rail].memh == UCT_MEM_HANDLE_NULL;
+}
+
+static UCS_F_ALWAYS_INLINE int
+ucp_dt_have_rails(ucp_dt_state_t *state)
+{
+    return !ucp_dt_is_empty_rail(state, 0);
+}
+
 #endif

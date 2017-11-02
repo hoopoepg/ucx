@@ -105,7 +105,7 @@ static size_t ucp_tag_rndv_pack_mrail_rkeys(ucp_request_t *sreq, void *rkey_buf,
 
     if (cnt) {
         for (i = 0; i < cnt; i++) {
-            ucs_assert_always(!ucp_request_is_empty_rail(state, i));
+            ucs_assert_always(!ucp_dt_is_empty_rail(state, i));
 
             lane = ucp_ep_get_rndv_get_lane(ep, i);
 
@@ -354,7 +354,7 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_proto_progress_rndv_get_zcopy, (self),
         status = ucp_request_send_buffer_reg(rndv_req, rndv_req->send.lane);
         ucs_assert_always(status == UCS_OK);
     } else if (ucp_ep_is_rndv_mrail_present(rndv_req->send.ep) &&
-               !ucp_request_have_rails(&rndv_req->send.state.dt)) {
+               !ucp_dt_have_rails(&rndv_req->send.state.dt)) {
         ucp_request_mrail_reg(rndv_req);
         rndv_req->send.reg_rsc = UCP_NULL_RESOURCE;
         rndv_req->send.rndv_get.rkey->rail_idx = 0;
@@ -722,15 +722,15 @@ static void ucp_rndv_prepare_zcopy_send_buffer(ucp_request_t *sreq, ucp_ep_h ep)
     if ((sreq->flags & UCP_REQUEST_FLAG_OFFLOADED) &&
         (ucp_ep_get_am_lane(ep) != ucp_ep_get_tag_lane(ep))) {
         ucp_request_send_buffer_dereg(sreq, ucp_ep_get_tag_lane(sreq->send.ep));
-        ucp_request_clear_rails(&sreq->send.state.dt);
+        ucp_dt_clear_rails(&sreq->send.state.dt);
     } else if ((ucp_ep_is_rndv_lane_present(ep, 0)) &&
                (ucp_ep_get_am_lane(ep) != ucp_ep_get_rndv_get_lane(ep, 0))) {
         /* dereg the original send request since we are going to send on the AM lane next */
         ucp_rndv_rma_request_send_buffer_dereg(sreq);
-        ucp_request_clear_rails(&sreq->send.state.dt);
-    } else if (ucp_request_have_rails(&sreq->send.state.dt)) {
+        ucp_dt_clear_rails(&sreq->send.state.dt);
+    } else if (ucp_dt_have_rails(&sreq->send.state.dt)) {
         ucp_rndv_rma_request_send_buffer_dereg(sreq);
-        ucp_request_clear_rails(&sreq->send.state.dt);
+        ucp_dt_clear_rails(&sreq->send.state.dt);
     }
     if (sreq->send.state.dt.dt.contig.memh == UCT_MEM_HANDLE_NULL) {
         /* register the send buffer for the zcopy operation */
