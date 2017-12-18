@@ -131,6 +131,7 @@ struct ucs_rcache {
                                           since we cannot use regulat malloc().
                                           The backing storage is original mmap()
                                           which does not generate memory events */
+    ucs_mpool_t            reg_mp;   /**< Memory pool to allocate entries regions */
     char                   *name;
 };
 

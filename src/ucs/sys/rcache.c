@@ -161,7 +161,8 @@ static void ucs_mem_region_destroy_internal(ucs_rcache_t *rcache,
         }
     }
 
-    ucs_free(region);
+    /*ucs_free(region);*/
+    ucs_mpool_put(region);
 }
 
 static inline void ucs_rcache_region_put_internal(ucs_rcache_t *rcache,
@@ -436,8 +437,9 @@ retry:
     }
 
     /* Allocate structure for new region */
-    region = ucs_memalign(UCS_PGT_ENTRY_MIN_ALIGN, rcache->params.region_struct_size,
-                          "rcache_region");
+    /*region = ucs_memalign(UCS_PGT_ENTRY_MIN_ALIGN, rcache->params.region_struct_size,*/
+                          /*"rcache_region");*/
+    region = (ucs_rcache_region_t*)ucs_mpool_get(&rcache->reg_mp);
     if (region == NULL) {
         status = UCS_ERR_NO_MEMORY;
         goto out_unlock;
@@ -599,15 +601,23 @@ static UCS_CLASS_INIT_FUNC(ucs_rcache_t, const ucs_rcache_params_t *params,
         goto err_cleanup_pgtable;
     }
 
+    status = ucs_mpool_init(&self->reg_mp, 0, self->params.region_struct_size, 0,
+                            1, UCS_PGT_ENTRY_MIN_ALIGN, -1, &ucs_rcache_mp_ops, "rcache_reg_mp");
+    if (status != UCS_OK) {
+        goto err_destroy_mp;
+    }
+
     status = ucm_set_event_handler(UCM_EVENT_VM_UNMAPPED, params->ucm_event_priority,
                                    ucs_rcache_unmapped_callback, self);
     if (status != UCS_OK) {
-        goto err_destroy_mp;
+        goto err_destroy_reg_mp;
     }
 
     ucs_queue_head_init(&self->inv_q);
     return UCS_OK;
 
+err_destroy_reg_mp:
+    ucs_mpool_cleanup(&self->reg_mp, 1);
 err_destroy_mp:
     ucs_mpool_cleanup(&self->inv_mp, 1);
 err_cleanup_pgtable:
@@ -629,6 +639,7 @@ static UCS_CLASS_CLEANUP_FUNC(ucs_rcache_t)
     ucs_rcache_check_inv_queue(self);
     ucs_rcache_purge(self);
 
+    ucs_mpool_cleanup(&self->reg_mp, 1);
     ucs_mpool_cleanup(&self->inv_mp, 1);
     ucs_pgtable_cleanup(&self->pgtable);
     pthread_spin_destroy(&self->inv_lock);
