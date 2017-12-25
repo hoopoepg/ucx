@@ -72,7 +72,8 @@ typedef struct ucp_mem_desc {
 void ucp_rkey_resolve_inner(ucp_rkey_h rkey, ucp_ep_h ep);
 
 ucp_lane_index_t ucp_rkey_get_rma_bw_lane(ucp_rkey_h rkey, ucp_ep_h ep,
-                                          uct_rkey_t *uct_rkey_p);
+                                          uct_rkey_t *uct_rkey_p,
+                                          ucp_lane_map_t ignore);
 
 ucs_status_t ucp_mpool_malloc(ucs_mpool_t *mp, size_t *size_p, void **chunk_p);
 
@@ -125,15 +126,21 @@ void ucp_rkey_dump_packed(const void *rkey_buffer, char *buffer, size_t max);
 
 
 static UCS_F_ALWAYS_INLINE uct_mem_h
-ucp_memh2uct(ucp_mem_h memh, ucp_md_index_t md_idx)
+ucp_memh_map2uct(uct_mem_h *uct, ucp_md_map_t md_map, ucp_md_index_t md_idx)
 {
     ucp_md_index_t uct_idx;
 
-    if (!(memh->md_map & UCS_BIT(md_idx))) {
+    if (!(md_map & UCS_BIT(md_idx))) {
         return NULL;
     }
-    uct_idx = ucs_count_one_bits(memh->md_map & UCS_MASK(md_idx));
-    return memh->uct[uct_idx];
+    uct_idx = ucs_count_one_bits(md_map & UCS_MASK(md_idx));
+    return uct[uct_idx];
+}
+
+static UCS_F_ALWAYS_INLINE uct_mem_h
+ucp_memh2uct(ucp_mem_h memh, ucp_md_index_t md_idx)
+{
+    return ucp_memh_map2uct(memh->uct, memh->md_map, md_idx);
 }
 
 
