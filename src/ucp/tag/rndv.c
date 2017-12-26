@@ -332,7 +332,7 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_rndv_progress_rma_get_zcopy, (self),
     if ((offset == 0) && (remainder > 0) && (rndv_req->send.length > ucp_mtu)) {
         length = ucp_mtu - remainder;
     } else {
-        chunk = ucs_align_up((rndv_req->send.length - offset) /
+        chunk = ucs_align_up(rndv_req->send.length /
                              rndv_req->send.rndv_get.lane_count, align);
         length = ucs_min(ucs_min(chunk, rndv_req->send.length - offset),
                          ucp_ep_config(rndv_req->send.ep)->tag.rndv.max_get_zcopy);
