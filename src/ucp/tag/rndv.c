@@ -232,11 +232,14 @@ static void ucp_rndv_get_lanes_count(ucp_request_t *req)
         return; /* already resolved */
     }
 
-    while((lane = ucp_rkey_get_rma_bw_lane(req->send.rndv_get.rkey, ep,
-                                           &uct_rkey, map)) != UCP_NULL_LANE) {
+    while ((lane = ucp_rkey_get_rma_bw_lane(req->send.rndv_get.rkey, ep,
+                                            &uct_rkey, map)) != UCP_NULL_LANE) {
         req->send.rndv_get.lane_count++;
         map |= UCS_BIT(lane);
     }
+
+    req->send.rndv_get.lane_count = ucs_min(req->send.rndv_get.lane_count,
+                                            ep->worker->context->config.ext.max_rndv_lanes);
 }
 
 static ucp_lane_index_t ucp_rndv_get_next_lane(ucp_request_t *rndv_req, uct_rkey_t *uct_rkey)
@@ -267,24 +270,6 @@ static ucp_lane_index_t ucp_rndv_get_next_lane(ucp_request_t *rndv_req, uct_rkey
     return lane;
 }
 
-static ucs_status_t ucp_rndv_get_reg_lane(ucp_request_t *req, ucp_lane_index_t lane)
-{
-    /* add new lane to registration map */
-    ucp_md_map_t md_map = UCS_BIT(ucp_ep_md_index(req->send.ep, lane)) |
-                          req->send.state.dt.dt.contig.md_map;
-    ucs_assert(ucs_count_one_bits(md_map) <= UCP_MAX_OP_MDS);
-    return ucp_request_send_buffer_reg(req, md_map);
-}
-
-static void ucp_rndv_get_fixup_iov(uct_iov_t *iov, ucp_request_t *req)
-{
-    /* TODO: is this correct? memh array may skip MD's where
-     * registration is not supported */
-    iov->memh = ucp_memh_map2uct(req->send.state.dt.dt.contig.memh,
-                                 req->send.state.dt.dt.contig.md_map,
-                                 ucp_ep_md_index(req->send.ep, req->send.lane));
-}
-
 UCS_PROFILE_FUNC(ucs_status_t, ucp_rndv_progress_rma_get_zcopy, (self),
                  uct_pending_req_t *self)
 {
@@ -298,6 +283,7 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_rndv_progress_rma_get_zcopy, (self),
     ucp_rsc_index_t rsc_index;
     ucp_dt_state_t state;
     uct_rkey_t uct_rkey;
+    ucp_md_index_t memh_idx;
 
     if (ucp_ep_is_stub(ep)) {
         rndv_req->send.lane = 0;
@@ -319,7 +305,7 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_rndv_progress_rma_get_zcopy, (self),
         return UCS_OK;
     }
 
-    status = ucp_rndv_get_reg_lane(rndv_req, rndv_req->send.lane);
+    status = ucp_request_add_reg_lane(rndv_req, rndv_req->send.lane);
     ucs_assert_always(status == UCS_OK);
 
     rsc_index = ucp_ep_get_rsc_index(rndv_req->send.ep, rndv_req->send.lane);
@@ -343,9 +329,13 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_rndv_progress_rma_get_zcopy, (self),
                    length, rndv_req->send.lane);
 
     state = rndv_req->send.state.dt;
+    /* TODO: is this correct? memh array may skip MD's where
+     * registration is not supported. for now SHM may avoid registration,
+     * but it will work on single lane */
+    memh_idx = ucp_memh_map2idx(rndv_req->send.state.dt.dt.contig.md_map,
+                                ucp_ep_md_index(rndv_req->send.ep, rndv_req->send.lane));
     ucp_dt_iov_copy_uct(iov, &iovcnt, max_iovcnt, &state, rndv_req->send.buffer,
-                        ucp_dt_make_contig(1), length);
-    ucp_rndv_get_fixup_iov(iov, rndv_req);
+                        ucp_dt_make_contig(1), length, memh_idx);
 
     status = uct_ep_get_zcopy(ep->uct_eps[rndv_req->send.lane],
                               iov, iovcnt,
@@ -659,7 +649,7 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_rndv_progress_rma_put_zcopy, (self),
 
     state = sreq->send.state.dt;
     ucp_dt_iov_copy_uct(iov, &iovcnt, max_iovcnt, &state, sreq->send.buffer,
-                        ucp_dt_make_contig(1), length);
+                        ucp_dt_make_contig(1), length, 0);
     status = uct_ep_put_zcopy(sreq->send.ep->uct_eps[sreq->send.lane],
                               iov, iovcnt,
                               sreq->send.rndv_put.remote_address + offset,
