@@ -337,8 +337,8 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_rndv_progress_rma_get_zcopy, (self),
     /* TODO: is this correct? memh array may skip MD's where
      * registration is not supported. for now SHM may avoid registration,
      * but it will work on single lane */
-    ucp_dt_iov_copy_uct(iov, &iovcnt, max_iovcnt, &state, rndv_req->send.buffer,
-                        ucp_dt_make_contig(1), length,
+    ucp_dt_iov_copy_uct(ep->worker->context, iov, &iovcnt, max_iovcnt, &state,
+                        rndv_req->send.buffer, ucp_dt_make_contig(1), length,
                         ucp_ep_md_index(rndv_req->send.ep, rndv_req->send.lane));
 
     status = uct_ep_get_zcopy(ep->uct_eps[rndv_req->send.lane],
@@ -621,11 +621,12 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_rndv_progress_am_bcopy, (self),
 UCS_PROFILE_FUNC(ucs_status_t, ucp_rndv_progress_rma_put_zcopy, (self),
                  uct_pending_req_t *self)
 {
-    ucp_request_t *sreq = ucs_container_of(self, ucp_request_t, send.uct);
+    ucp_request_t *sreq     = ucs_container_of(self, ucp_request_t, send.uct);
+    const size_t max_iovcnt = 1;
+    ucp_ep_h ep             = sreq->send.ep;
     ucs_status_t status;
     size_t offset, ucp_mtu, align, remainder, length;
     ucp_rsc_index_t rsc_index;
-    const size_t max_iovcnt = 1;
     uct_iov_t iov[max_iovcnt];
     size_t iovcnt;
     ucp_dt_state_t state;
@@ -633,9 +634,9 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_rndv_progress_rma_put_zcopy, (self),
     status = ucp_request_send_buffer_reg_lane(sreq, sreq->send.lane);
     ucs_assert_always(status == UCS_OK);
 
-    rsc_index = ucp_ep_get_rsc_index(sreq->send.ep, sreq->send.lane);
-    align     = sreq->send.ep->worker->ifaces[rsc_index].attr.cap.put.opt_zcopy_align;
-    ucp_mtu   = sreq->send.ep->worker->ifaces[rsc_index].attr.cap.put.align_mtu;
+    rsc_index = ucp_ep_get_rsc_index(ep, sreq->send.lane);
+    align     = ep->worker->ifaces[rsc_index].attr.cap.put.opt_zcopy_align;
+    ucp_mtu   = ep->worker->ifaces[rsc_index].attr.cap.put.align_mtu;
 
     offset    = sreq->send.state.dt.offset;
     remainder = (uintptr_t)sreq->send.buffer % align;
@@ -644,7 +645,7 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_rndv_progress_rma_put_zcopy, (self),
         length = ucp_mtu - remainder;
     } else {
         length = ucs_min(sreq->send.length - offset,
-                         ucp_ep_config(sreq->send.ep)->tag.rndv.max_put_zcopy);
+                         ucp_ep_config(ep)->tag.rndv.max_put_zcopy);
     }
 
     ucs_trace_data("req %p: offset %zu remainder %zu. read to %p len %zu",
@@ -652,9 +653,9 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_rndv_progress_rma_put_zcopy, (self),
                    (void*)sreq->send.buffer + offset, length);
 
     state = sreq->send.state.dt;
-    ucp_dt_iov_copy_uct(iov, &iovcnt, max_iovcnt, &state, sreq->send.buffer,
-                        ucp_dt_make_contig(1), length, 0);
-    status = uct_ep_put_zcopy(sreq->send.ep->uct_eps[sreq->send.lane],
+    ucp_dt_iov_copy_uct(ep->worker->context, iov, &iovcnt, max_iovcnt, &state,
+                        sreq->send.buffer, ucp_dt_make_contig(1), length, 0);
+    status = uct_ep_put_zcopy(ep->uct_eps[sreq->send.lane],
                               iov, iovcnt,
                               sreq->send.rndv_put.remote_address + offset,
                               sreq->send.rndv_put.uct_rkey,
