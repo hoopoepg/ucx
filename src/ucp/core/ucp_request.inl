@@ -355,7 +355,7 @@ ucp_request_send_buffer_reg_lane(ucp_request_t *req, ucp_lane_index_t lane)
 }
 
 static UCS_F_ALWAYS_INLINE ucs_status_t
-ucp_request_add_reg_lane(ucp_request_t *req, ucp_lane_index_t lane)
+ucp_send_request_add_reg_lane(ucp_request_t *req, ucp_lane_index_t lane)
 {
     /* add new lane to registration map */
     ucp_md_map_t md_map = UCS_BIT(ucp_ep_md_index(req->send.ep, lane)) |

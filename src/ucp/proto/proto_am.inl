@@ -79,13 +79,15 @@ static UCS_F_ALWAYS_INLINE
 void ucp_dt_iov_copy_uct(uct_iov_t *iov, size_t *iovcnt, size_t max_dst_iov,
                          ucp_dt_state_t *state, const ucp_dt_iov_t *src_iov,
                          ucp_datatype_t datatype, size_t length_max,
-                         ucp_md_index_t memh_index)
+                         ucp_md_index_t md_index)
 {
     size_t iov_offset, max_src_iov, src_it, dst_it;
     size_t length_it = 0;
+    ucp_md_index_t memh_index;
 
     switch (datatype & UCP_DATATYPE_CLASS_MASK) {
     case UCP_DATATYPE_CONTIG:
+        memh_index = ucp_memh_map2idx(state->dt.contig.md_map, md_index);
         iov[0].buffer = (void *)src_iov + state->offset;
         iov[0].length = length_max;
         iov[0].memh   = state->dt.contig.memh[memh_index];
