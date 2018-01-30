@@ -891,6 +891,10 @@ static size_t ucp_ep_config_calc_rndv_thresh(ucp_worker_t *worker,
     ucp_ep_config_calc_thresh_params(worker, config, eager_lanes, &eager);
     ucp_ep_config_calc_thresh_params(worker, config, rndv_lanes, &rndv);
 
+    if (!eager.bw || !rndv.bw) {
+        goto fallback;
+    }
+
     rsc_index  = config->key.lanes[eager_lanes[0]].rsc_index;
     iface_attr = &worker->ifaces[rsc_index].attr;
 
@@ -912,9 +916,10 @@ static size_t ucp_ep_config_calc_rndv_thresh(ucp_worker_t *worker,
 
     if ((numerator > 0) && (denumerator > 0)) {
         return ucs_max(numerator / denumerator, iface_attr->cap.am.max_bcopy);
-    } else {
-        return context->config.ext.rndv_thresh_fallback;
     }
+
+fallback:
+    return context->config.ext.rndv_thresh_fallback;
 }
 
 static size_t ucp_ep_thresh(size_t thresh_value, size_t min_value,
