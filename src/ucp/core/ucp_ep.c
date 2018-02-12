@@ -841,19 +841,20 @@ int ucp_ep_config_is_equal(const ucp_ep_config_key_t *key1,
 }
 
 static void ucp_ep_config_calc_thresh_params(ucp_worker_h worker,
-                                             ucp_ep_config_t *config,
-                                             ucp_lane_index_t *lanes,
-                                             ucp_ep_thresh_params_t *params)
+                                             const ucp_ep_config_t *config,
+                                             const ucp_lane_index_t *lanes,
+                                             ucp_ep_thresh_params_t *params_p)
 {
-    ucp_context_h context = worker->context;
-    ucp_md_map_t md_map   = 0;
+    ucp_context_h context         = worker->context;
+    ucp_md_map_t md_map           = 0;
+    ucp_ep_thresh_params_t params = {0};
     ucp_lane_index_t lane;
     ucp_rsc_index_t rsc_index;
     ucp_md_index_t md_index;
     uct_md_attr_t *md_attr;
     int i;
 
-    for(i = 0; lanes[i] != UCP_NULL_LANE; i++) {
+    for (i = 0; lanes[i] != UCP_NULL_LANE; i++) {
         lane      = lanes[i];
         rsc_index = config->key.lanes[lane].rsc_index;
         md_index  = config->md_index[lane];
@@ -862,24 +863,26 @@ static void ucp_ep_config_calc_thresh_params(ucp_worker_h worker,
             md_map |= UCS_BIT(md_index);
             md_attr = &context->tl_mds[md_index].attr;
             if (md_attr->cap.flags & UCT_MD_FLAG_REG) {
-                params->reg_growth   += md_attr->reg_cost.growth;
-                params->reg_overhead += md_attr->reg_cost.overhead;
+                params.reg_growth   += md_attr->reg_cost.growth;
+                params.reg_overhead += md_attr->reg_cost.overhead;
             }
         }
-        params->bw += worker->ifaces[rsc_index].attr.bandwidth;
+        params.bw += worker->ifaces[rsc_index].attr.bandwidth;
     }
+
+    *params_p = params;
 }
 
 static size_t ucp_ep_config_calc_rndv_thresh(ucp_worker_t *worker,
-                                             ucp_ep_config_t *config,
-                                             ucp_lane_index_t *eager_lanes,
-                                             ucp_lane_index_t *rndv_lanes,
+                                             const ucp_ep_config_t *config,
+                                             const ucp_lane_index_t *eager_lanes,
+                                             const ucp_lane_index_t *rndv_lanes,
                                              int recv_reg_cost)
 {
     ucp_context_h context        = worker->context;
-    ucp_ep_thresh_params_t eager = {0};
-    ucp_ep_thresh_params_t rndv  = {0};
     double diff_percent          = 1.0 - context->config.ext.rndv_perf_diff / 100.0;
+    ucp_ep_thresh_params_t eager;
+    ucp_ep_thresh_params_t rndv;
     double eager_latency;
     double rndv_latency;
     double eager_overhead;
