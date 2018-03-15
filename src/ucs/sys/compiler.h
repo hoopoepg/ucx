@@ -72,13 +72,6 @@
  */
 #define ucs_unaligned_ptr(_ptr) ((void*)(_ptr))
 
-/**
- * suppress compilation warning on string size on gcc 8+
- */
-#define ucs_safe_strncpy(_dst, _src, _len) \
-    memcpy(_dst, _src, ucs_min(_len, strnlen(_src, _len) + 1)); \
-    *(char*)UCS_PTR_BYTE_OFFSET(_dst, (_len) - 1) = 0
-
 
 /**
  * Define cache-line padding variable inside a structure
