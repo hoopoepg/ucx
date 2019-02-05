@@ -879,8 +879,8 @@ static size_t ucp_ep_config_calc_rndv_thresh(ucp_worker_t *worker,
                                              const ucp_lane_index_t *rndv_lanes,
                                              int recv_reg_cost)
 {
-    ucp_context_h context        = worker->context;
-    double diff_percent          = 1.0 - context->config.ext.rndv_perf_diff / 100.0;
+    ucp_context_h context = worker->context;
+    double diff_percent   = 1.0 - context->config.ext.rndv_perf_diff / 100.0;
     ucp_ep_thresh_params_t eager;
     ucp_ep_thresh_params_t rndv;
     double eager_latency;
@@ -953,8 +953,9 @@ static void ucp_ep_config_set_am_rndv_thresh(ucp_worker_h worker, uct_iface_attr
         rndv_thresh = rndv_nbr_thresh = SIZE_MAX;
     } else if (context->config.ext.rndv_thresh == UCS_CONFIG_MEMUNITS_AUTO) {
         /* auto - Make UCX calculate the AM rndv threshold on its own.*/
-        rndv_thresh     = ucp_ep_config_calc_rndv_thresh(context, iface_attr, md_attr,
-                                                         context->config.ext.bcopy_bw,
+        rndv_thresh     = ucp_ep_config_calc_rndv_thresh(worker, config,
+                                                         config->key.am_bw_lanes,
+                                                         config->key.am_bw_lanes,
                                                          0);
         rndv_nbr_thresh = context->config.ext.rndv_send_nbr_thresh;
         ucs_trace("Active Message rendezvous threshold is %zu", rndv_thresh);
@@ -998,14 +999,14 @@ static void ucp_ep_config_set_rndv_thresh(ucp_worker_t *worker,
     }
 
     iface_attr = ucp_worker_iface_get_attr(worker, rsc_index);
-    md_attr    = &context->tl_mds[context->tl_rscs[rsc_index].md_index].attr;
     iface_attr = &worker->ifaces[rsc_index].attr;
     ucs_assert_always(iface_attr->cap.flags & rndv_cap_flag);
 
     if (context->config.ext.rndv_thresh == UCS_CONFIG_MEMUNITS_AUTO) {
         /* auto - Make UCX calculate the RMA (get_zcopy) rndv threshold on its own.*/
-        rndv_thresh     = ucp_ep_config_calc_rndv_thresh(context, iface_attr,
-                                                         md_attr, SIZE_MAX, 1);
+        rndv_thresh     = ucp_ep_config_calc_rndv_thresh(worker, config,
+                                                         config->key.am_bw_lanes,
+                                                         lanes, 1);
         rndv_nbr_thresh = context->config.ext.rndv_send_nbr_thresh;
     } else {
         rndv_thresh     = context->config.ext.rndv_thresh;
