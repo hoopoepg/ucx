@@ -829,32 +829,37 @@ static void uct_ib_mem_init(uct_ib_mem_t *memh, unsigned uct_flags,
     }
 }
 
+#if HAVE_IBV_EXP_DM
 typedef struct uct_mlx5_dm_va {
     struct ibv_exp_dm  ibv_dm;
     size_t             length;
     uint64_t           *start_va;
 } uct_mlx5_dm_va_t;
+#endif
 
 static ucs_status_t uct_ib_mem_alloc(uct_md_h uct_md, size_t *length_p,
                                      void **address_p, unsigned flags,
                                      const char *alloc_name, uct_mem_h *memh_p)
 {
 #if HAVE_DECL_IBV_EXP_ACCESS_ALLOCATE_MR
-    struct ibv_exp_alloc_dm_attr dm_attr = {0};
-    struct ibv_exp_reg_mr_in mr_in       = {0};
-    uct_ib_md_t *md                      = ucs_derived_of(uct_md, uct_ib_md_t);
+    uct_ib_md_t *md = ucs_derived_of(uct_md, uct_ib_md_t);
     ucs_status_t status;
     uint64_t exp_access;
     uct_ib_mem_t *memh;
     size_t length;
-
 #if HAVE_IBV_EXP_DM
+    struct ibv_exp_alloc_dm_attr dm_attr;
+    struct ibv_exp_reg_mr_in mr_in;
+
     if (!(flags & UCT_MD_MEM_FLAG_DM) &&
         !md->config.enable_contig_pages ) {
         return UCS_ERR_UNSUPPORTED;
     }
 #else
     if (!md->config.enable_contig_pages) {
+        return UCS_ERR_UNSUPPORTED;
+    }
+    if (flags & UCT_MD_MEM_FLAG_DM) {
         return UCS_ERR_UNSUPPORTED;
     }
 #endif
@@ -868,7 +873,11 @@ static ucs_status_t uct_ib_mem_alloc(uct_md_h uct_md, size_t *length_p,
     length     = *length_p;
     exp_access = uct_ib_md_access_flags(md, flags, length) |
                  IBV_EXP_ACCESS_ALLOCATE_MR;
+#if HAVE_IBV_EXP_DM
     if (flags & UCT_MD_MEM_FLAG_DM) {
+        memset(&dm_attr, 0, sizeof(dm_attr));
+        memset(&mr_in, 0, sizeof(mr_in));
+
         dm_attr.length     = length;
         dm_attr.comp_mask  = 0;
         memh->dm           = UCS_PROFILE_CALL(ibv_exp_alloc_dm, md->dev.ibv_context, &dm_attr);
@@ -885,14 +894,17 @@ static ucs_status_t uct_ib_mem_alloc(uct_md_h uct_md, size_t *length_p,
             mr_in.dm           = memh->dm;
             mr_in.length       = dm_attr.length;
             memh->mr           = UCS_PROFILE_CALL(ibv_exp_reg_mr, &mr_in);
+            *address_p         = ((uct_mlx5_dm_va_t*)memh->dm)->start_va;
         }
     }
+#endif
 
     if (!(flags & UCT_MD_MEM_FLAG_DM)) {
         status = uct_ib_md_reg_mr(md, NULL, length, exp_access, 0, &memh->mr);
         if (status != UCS_OK) {
             goto err_free_memh;
         }
+        *address_p = memh->mr->addr;
     }
 
     ucs_trace("allocated memory %p..%p on %s lkey 0x%x rkey 0x%x",
@@ -909,8 +921,6 @@ static ucs_status_t uct_ib_mem_alloc(uct_md_h uct_md, size_t *length_p,
     UCS_STATS_UPDATE_COUNTER(md->stats, UCT_IB_MD_STAT_MEM_ALLOC, +1);
     ucs_memtrack_allocated(memh->mr->addr, memh->mr->length UCS_MEMTRACK_VAL);
 
-    *address_p = (flags & UCT_MD_MEM_FLAG_DM) ?
-                 ((uct_mlx5_dm_va_t*)memh->dm)->start_va : memh->mr->addr;
     *length_p  = memh->mr->length;
     *memh_p    = memh;
     return UCS_OK;
@@ -948,7 +958,11 @@ static ucs_status_t uct_ib_mem_free(uct_md_h uct_md, uct_mem_h memh)
     }
 
     if (ib_memh->flags & UCT_IB_MEM_FLAG_DM) {
+#if HAVE_IBV_EXP_DM
         UCS_PROFILE_CALL(ibv_exp_free_dm, ib_memh->dm);
+#else
+        ucs_assert_always(0);
+#endif
     }
 
     uct_ib_memh_free(ib_memh);
