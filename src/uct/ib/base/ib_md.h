@@ -49,7 +49,6 @@ typedef struct uct_ib_md_ext_config {
                                                 enabled on the Ethernet network */
     int                      prefer_nearest_device; /**< Give priority for near
                                                          device */
-    int                      enable_umr_pack;
     int                      enable_contig_pages; /** Enable contiguous pages */
     int                      enable_indirect_atomic; /** Enable indirect atomic */
     int                      enable_gpudirect_rdma; /** Enable GPUDirect RDMA */
@@ -66,6 +65,16 @@ typedef struct uct_ib_md_ext_config {
 
     size_t                   gid_index;    /**< IB GID index to use  */
 } uct_ib_md_ext_config_t;
+
+
+#if HAVE_IBV_EXP_DM
+/* uct_mlx5_dm_va is used to get pointer to DM mapped into process address space */
+typedef struct uct_mlx5_dm_va {
+    struct ibv_exp_dm  ibv_dm;
+    size_t             length;
+    uint64_t           *start_va;
+} uct_mlx5_dm_va_t;
+#endif
 
 
 typedef struct uct_ib_mem {

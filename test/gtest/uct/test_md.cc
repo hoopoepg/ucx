@@ -276,7 +276,7 @@ UCS_TEST_P(test_md, alloc_dm) {
     void *address;
     uct_mem_h memh;
 
-    check_caps(UCT_MD_FLAG_DM, "DM allocation");
+    check_caps(UCT_MD_FLAG_ALLOC_DEVICE_MEM, "DM allocation");
 
     for (unsigned i = 0; i < 300; ++i) {
         size = orig_size = i * 100;
@@ -285,7 +285,7 @@ UCS_TEST_P(test_md, alloc_dm) {
         }
 
         status = uct_md_mem_alloc(md(), &size, &address,
-                                  UCT_MD_MEM_ACCESS_ALL | UCT_MD_MEM_FLAG_DM,
+                                  UCT_MD_MEM_ACCESS_ALL | UCT_MD_MEM_FLAG_ON_DEVICE,
                                   "test DM", &memh);
         EXPECT_GT(size, 0ul);
 
