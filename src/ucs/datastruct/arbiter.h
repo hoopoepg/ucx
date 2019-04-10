@@ -9,6 +9,7 @@
 
 #include <ucs/sys/compiler_def.h>
 #include <ucs/datastruct/list.h>
+#include <ucs/datastruct/mpool.h>
 #include <ucs/type/status.h>
 #include <stdio.h>
 #include <ucs/debug/assert.h>
@@ -128,7 +129,8 @@ typedef ucs_arbiter_cb_result_t (*ucs_arbiter_callback_t)(ucs_arbiter_t *arbiter
  * Top-level arbiter.
  */
 struct ucs_arbiter {
-    ucs_arbiter_elem_t      *current;
+    ucs_list_link_t groups;       /* List link in the arbiter queue */
+    ucs_mpool_t     groups_mp;
     UCS_ARBITER_GUARD;
 };
 
@@ -137,7 +139,9 @@ struct ucs_arbiter {
  * Arbitration group.
  */
 struct ucs_arbiter_group {
-    ucs_arbiter_elem_t      *tail;
+    ucs_list_link_t       list;       /* List link in the arbiter queue */
+    ucs_list_link_t       elems;      /* List of elem to dispatch */
+    ucs_arbiter_group_t **ep_group;
 };
 
 
@@ -146,9 +150,8 @@ struct ucs_arbiter_group {
  * In order to keep it small, one of the fields is a union.
  */
 struct ucs_arbiter_elem {
-    ucs_list_link_t         list;       /* List link in the scheduler queue */
-    ucs_arbiter_elem_t      *next;      /* Next element, last points to head */
-    ucs_arbiter_group_t     *group;     /* Always points to the group */
+    ucs_list_link_t      list;       /* List link in the group queue */
+    ucs_arbiter_group_t *group;
 };
 
 
@@ -157,7 +160,7 @@ struct ucs_arbiter_elem {
  *
  * @param [in]  arbiter  Arbiter object to initialize.
  */
-void ucs_arbiter_init(ucs_arbiter_t *arbiter);
+ucs_status_t ucs_arbiter_init(ucs_arbiter_t *arbiter);
 void ucs_arbiter_cleanup(ucs_arbiter_t *arbiter);
 
 
@@ -166,7 +169,7 @@ void ucs_arbiter_cleanup(ucs_arbiter_t *arbiter);
  *
  * @param [in]  group    Group to initialize.
  */
-void ucs_arbiter_group_init(ucs_arbiter_group_t *group);
+ucs_status_t ucs_arbiter_group_init(ucs_arbiter_t *arbiter, ucs_arbiter_group_t **group);
 void ucs_arbiter_group_cleanup(ucs_arbiter_group_t *group);
 
 
@@ -177,7 +180,8 @@ void ucs_arbiter_group_cleanup(ucs_arbiter_group_t *group);
  */
 static inline void ucs_arbiter_elem_init(ucs_arbiter_elem_t *elem)
 {
-    elem->next = NULL;
+    ucs_list_head_init(&elem->list);
+    elem->group = NULL;
 }
 
 
@@ -191,8 +195,7 @@ void ucs_arbiter_group_push_elem_always(ucs_arbiter_group_t *group,
 /**
  * Add a new work element to the head of a group - internal function
  */
-void ucs_arbiter_group_push_head_elem_always(ucs_arbiter_t *arbiter,
-                                             ucs_arbiter_group_t *group,
+void ucs_arbiter_group_push_head_elem_always(ucs_arbiter_group_t *group,
                                              ucs_arbiter_elem_t *elem);
 
 
@@ -223,8 +226,7 @@ void ucs_arbiter_dispatch_nonempty(ucs_arbiter_t *arbiter, unsigned per_group,
 
 
 /* Internal function */
-void ucs_arbiter_group_head_desched(ucs_arbiter_t *arbiter,
-                                    ucs_arbiter_elem_t *head);
+void ucs_arbiter_group_head_desched(ucs_arbiter_group_t *group);
 
 
 /**
@@ -234,7 +236,7 @@ void ucs_arbiter_group_head_desched(ucs_arbiter_t *arbiter,
  */
 static inline int ucs_arbiter_is_empty(ucs_arbiter_t *arbiter)
 {
-    return arbiter->current == NULL;
+    return ucs_list_is_empty(&arbiter->groups);
 }
 
 
@@ -243,7 +245,7 @@ static inline int ucs_arbiter_is_empty(ucs_arbiter_t *arbiter)
  */
 static inline int ucs_arbiter_group_is_empty(ucs_arbiter_group_t *group)
 {
-    return group->tail == NULL;
+    return ucs_list_is_empty(&group->elems);
 }
 
 
@@ -267,19 +269,13 @@ static inline void ucs_arbiter_group_schedule(ucs_arbiter_t *arbiter,
  * Deschedule already scheduled group. If the group is not scheduled, the operation
  * will have no effect
  *
- * @param [in]  arbiter  Arbiter object that  group on.
  * @param [in]  group    Group to deschedule.
  */
 
-static inline void ucs_arbiter_group_desched(ucs_arbiter_t *arbiter,
-                                             ucs_arbiter_group_t *group)
+static inline void ucs_arbiter_group_desched(ucs_arbiter_group_t *group)
 {
     if (ucs_unlikely(!ucs_arbiter_group_is_empty(group))) {
-        ucs_arbiter_elem_t *head;
-
-        head = group->tail->next;
-        ucs_arbiter_group_head_desched(arbiter, head);
-        head->list.next = NULL;
+        ucs_arbiter_group_head_desched(group);
     }
 }
 
@@ -291,7 +287,18 @@ static inline void ucs_arbiter_group_desched(ucs_arbiter_t *arbiter,
  */
 static inline int ucs_arbiter_elem_is_scheduled(ucs_arbiter_elem_t *elem)
 {
-    return elem->next != NULL;
+    return !ucs_list_is_empty(&elem->list);
+}
+
+
+/**
+ * @return Whether the element is queued in an arbiter group.
+ *         (an element can't be queued more than once)
+ *
+ */
+static inline int ucs_arbiter_group_is_scheduled(ucs_arbiter_group_t *group)
+{
+    return !ucs_list_is_empty(&group->list);
 }
 
 
@@ -323,15 +330,14 @@ ucs_arbiter_group_push_elem(ucs_arbiter_group_t *group,
  * @param [in]  elem     Work element to add.
  */
 static inline void
-ucs_arbiter_group_push_head_elem(ucs_arbiter_t *arbiter,
-                                 ucs_arbiter_group_t *group,
+ucs_arbiter_group_push_head_elem(ucs_arbiter_group_t *group,
                                  ucs_arbiter_elem_t *elem)
 {
     if (ucs_arbiter_elem_is_scheduled(elem)) {
         return;
     }
 
-    ucs_arbiter_group_push_head_elem_always(arbiter, group, elem);
+    ucs_arbiter_group_push_head_elem_always(group, elem);
 }
 
 
@@ -361,9 +367,9 @@ ucs_arbiter_dispatch(ucs_arbiter_t *arbiter, unsigned per_group,
 /**
  * @return Group the element belongs to.
  */
-static inline ucs_arbiter_group_t* ucs_arbiter_elem_group(ucs_arbiter_elem_t *elem)
+static inline void* ucs_arbiter_elem_group(ucs_arbiter_elem_t *elem)
 {
-    return elem->group;
+    return elem->group->ep_group;
 }
 
 
@@ -373,7 +379,7 @@ static inline ucs_arbiter_group_t* ucs_arbiter_elem_group(ucs_arbiter_elem_t *el
 static inline int
 ucs_arbiter_elem_is_last(ucs_arbiter_group_t *group, ucs_arbiter_elem_t *elem)
 {
-    return group->tail == elem;
+    return ucs_list_tail(&group->elems, ucs_arbiter_elem_t, list) == elem;
 }
 
 /**
@@ -382,7 +388,8 @@ ucs_arbiter_elem_is_last(ucs_arbiter_group_t *group, ucs_arbiter_elem_t *elem)
 static inline int
 ucs_arbiter_elem_is_only(ucs_arbiter_group_t *group, ucs_arbiter_elem_t *elem)
 {
-    return ucs_arbiter_elem_is_last(group, elem) && (elem->next == elem);
+    return ucs_arbiter_elem_is_last(group, elem) &&
+           ucs_list_head(&group->elems, ucs_arbiter_elem_t, list) == elem;;
 }
 
 #endif

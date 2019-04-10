@@ -1,5 +1,5 @@
 /*
-* Copyright (C) Mellanox Technologies Ltd. 2001-2014.  ALL RIGHTS RESERVED.
+* Copyright (C) Mellanox Technologies Ltd. 2001-2019.  ALL RIGHTS RESERVED.
 *
 * See file LICENSE for terms.
 */
@@ -118,6 +118,30 @@ static inline void ucs_list_splice_tail(ucs_list_link_t *head,
 
     last->next = head;
     head->prev = last;
+}
+
+/**
+ * Set first list element to new head.
+ *
+ * @param head       List to update
+ * @param newhead    New head element to set at top, must be in list
+ *
+ * @note All elemens before newhead are connected to tail
+ */
+static inline void ucs_list_shift_head(ucs_list_link_t *head,
+                                       ucs_list_link_t *newhead)
+{
+    /* connect head & tail */
+    head->prev->next     = head->next;
+    head->next->prev     = head->prev;
+
+    /* point head to new element */
+    head->next           = newhead;
+    head->prev           = newhead->prev;
+
+    /* update new head element to head */
+    newhead->prev        = head;
+    newhead->prev->next  = head;
 }
 
 /**
