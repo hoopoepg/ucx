@@ -33,7 +33,8 @@ uct_rc_mlx5_txqp_bcopy_post(uct_rc_mlx5_iface_common_t *iface,
     desc->super.sn = txwq->sw_pi;
     uct_rc_mlx5_txqp_dptr_post(iface, IBV_QPT_RC, txqp, txwq,
                                opcode, buffer, length, &desc->lkey,
-                               rdma_raddr, uct_ib_md_direct_rkey(rdma_rkey),
+                               uct_rc_mlx5_rdma_addr(opcode, rdma_raddr, rdma_rkey),
+                               uct_ib_md_direct_rkey(rdma_rkey),
                                0, 0, 0, 0,
                                NULL, NULL, 0, fm_ce_se, imm_val_be, INT_MAX, log_sge);
     uct_rc_txqp_add_send_op(txqp, &desc->super);
@@ -62,7 +63,8 @@ uct_rc_mlx5_ep_zcopy_post(uct_rc_mlx5_ep_t *ep,
                                    &ep->super.txqp, &ep->tx.wq,
                                    opcode, iov, iovcnt,
                                    am_id, am_hdr, am_hdr_len,
-                                   rdma_raddr, uct_ib_md_direct_rkey(rdma_rkey),
+                                   uct_rc_mlx5_rdma_addr(opcode, rdma_raddr, rdma_rkey),
+                                   uct_ib_md_direct_rkey(rdma_rkey),
                                    tag, app_ctx, ib_imm_be,
                                    NULL, NULL, 0,
                                    (comp == NULL) ? force_sig : MLX5_WQE_CTRL_CQ_UPDATE,
@@ -85,7 +87,8 @@ uct_rc_mlx5_ep_put_short_inline(uct_ep_h tl_ep, const void *buffer, unsigned len
                                  &ep->super.txqp, &ep->tx.wq,
                                  MLX5_OPCODE_RDMA_WRITE,
                                  buffer, length, 0, 0, 0,
-                                 remote_addr, uct_ib_md_direct_rkey(rkey),
+                                 remote_addr + uct_ib_md_rkey_offset(rkey),
+                                 uct_ib_md_direct_rkey(rkey),
                                  NULL, NULL, 0, 0, INT_MAX);
     UCT_TL_EP_STAT_OP(&ep->super.super, PUT, SHORT, length);
     return UCS_OK;

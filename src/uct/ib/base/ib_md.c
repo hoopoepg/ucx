@@ -1071,8 +1071,9 @@ uct_ib_mem_advise(uct_md_h uct_md, uct_mem_h memh, void *addr, size_t length,
 static ucs_status_t uct_ib_mkey_pack(uct_md_h uct_md, uct_mem_h uct_memh,
                                      void *rkey_buffer)
 {
-    uct_ib_md_t *md         = ucs_derived_of(uct_md, uct_ib_md_t);
-    uct_ib_mem_t *memh      = uct_memh;
+    uct_ib_md_t *md                 = ucs_derived_of(uct_md, uct_ib_md_t);
+    uct_ib_mem_t *memh              = uct_memh;
+    uct_ib_md_rkey_packed_t *packed = rkey_buffer;
     uint32_t atomic_rkey;
     uint16_t umr_offset;
     ucs_status_t status;
@@ -1104,6 +1105,11 @@ static ucs_status_t uct_ib_mkey_pack(uct_md_h uct_md, uct_mem_h uct_memh,
     }
 
     uct_ib_md_pack_rkey(memh->mr->rkey, atomic_rkey, rkey_buffer);
+    if (memh->flags & UCT_IB_MEM_FLAG_DM) {
+        packed->offset = -(uint64_t)((uct_mlx5_dm_va_t*)memh->dm)->start_va;
+    } else {
+        packed->offset = 0;
+    }
     return UCS_OK;
 }
 
@@ -1111,7 +1117,7 @@ static ucs_status_t uct_ib_rkey_unpack(uct_md_component_t *mdc,
                                        const void *rkey_buffer, uct_rkey_t *rkey_p,
                                        void **handle_p)
 {
-    uint64_t packed_rkey = *(const uint64_t*)rkey_buffer;
+    uct_ib_md_rkey_packed_t *packed_rkey = (uct_ib_md_rkey_packed_t*)rkey_buffer;
     uct_ib_md_rkey_t *rkey;
 
     rkey = malloc(sizeof(*rkey));
@@ -1119,8 +1125,9 @@ static ucs_status_t uct_ib_rkey_unpack(uct_md_component_t *mdc,
         return UCS_ERR_NO_MEMORY;
     }
 
-    rkey->rma_rkey    = (uint32_t)packed_rkey;
-    rkey->atomic_rkey = packed_rkey >> 32;
+    rkey->rma_rkey    = (uint32_t)packed_rkey->rkey;
+    rkey->atomic_rkey = packed_rkey->rkey >> 32;
+    rkey->offset      = packed_rkey->offset;
 
     *rkey_p   = (uct_rkey_t)rkey;
     *handle_p = NULL;

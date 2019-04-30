@@ -267,8 +267,10 @@ static inline ucs_status_t ucp_mem_map_check_and_adjust_params(ucp_mem_map_param
     }
 
     /* Now, lets check the rest of erroneous cases from the matrix */
-    if (params->address == NULL) {
-        if (!(params->flags & UCP_MEM_MAP_ALLOCATE) && (params->length > 0)) {
+    if ((params->address == NULL)) {
+        if (!(params->flags & UCP_MEM_MAP_ALLOCATE) &&
+            (params->length > 0) &&
+            !(params->flags & UCP_MEM_MAP_FIXED)) {
             ucs_error("Undefined address with nonzero length requires "
                       "UCP_MEM_MAP_ALLOCATE flag");
             return UCS_ERR_INVALID_PARAM;
@@ -285,7 +287,9 @@ static inline ucs_status_t ucp_mem_map_check_and_adjust_params(ucp_mem_map_param
 static inline int ucp_mem_map_is_allocate(ucp_mem_map_params_t *params)
 {
     return (params->field_mask & UCP_MEM_MAP_PARAM_FIELD_FLAGS) &&
-           (params->flags & UCP_MEM_MAP_ALLOCATE);
+           ((params->flags & UCP_MEM_MAP_ALLOCATE) ||
+            ((params->field_mask & UCP_MEM_MAP_PARAM_FIELD_ADDRESS) &&
+             (params->flags & UCP_MEM_MAP_FIXED) && !params->address));
 }
 
 static ucs_status_t ucp_mem_map_common(ucp_context_h context, void *address,

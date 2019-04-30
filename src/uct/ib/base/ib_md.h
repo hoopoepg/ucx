@@ -17,7 +17,7 @@
 #include <ucs/memory/rcache.h>
 
 #define UCT_IB_MD_MAX_MR_SIZE       0x80000000UL
-#define UCT_IB_MD_PACKED_RKEY_SIZE  sizeof(uint64_t)
+#define UCT_IB_MD_PACKED_RKEY_SIZE  sizeof(uct_ib_md_rkey_packed_t)
 
 #define UCT_IB_MD_DEFAULT_GID_INDEX 0   /**< The gid index used by default for an IB/RoCE port */
 
@@ -47,7 +47,14 @@ enum {
 typedef struct uct_ib_md_rkey {
     uint32_t atomic_rkey;
     uint32_t rma_rkey;
+    uint64_t offset;
 } uct_ib_md_rkey_t;
+
+
+typedef struct uct_ib_md_rkey_packed {
+    uint64_t rkey;
+    uint64_t offset;
+} UCS_S_PACKED uct_ib_md_rkey_packed_t;
 
 
 typedef struct uct_ib_md_ext_config {
@@ -219,6 +226,13 @@ static uint32_t uct_ib_md_indirect_rkey(uct_rkey_t uct_rkey)
 }
 
 
+static inline uint64_t uct_ib_md_rkey_offset(uct_rkey_t uct_rkey)
+{
+    return (uct_rkey && (uct_rkey != UCT_INVALID_RKEY)) ?
+           ((uct_ib_md_rkey_t*)uct_rkey)->offset : 0;
+}
+
+
 static UCS_F_ALWAYS_INLINE void
 uct_ib_md_pack_rkey(uint32_t rkey, uint32_t atomic_rkey, void *rkey_buffer)
 {
@@ -241,7 +255,7 @@ static inline uint32_t uct_ib_resolve_atomic_rkey(uct_rkey_t uct_rkey,
     if (atomic_rkey == UCT_IB_INVALID_RKEY) {
         return uct_ib_md_direct_rkey(uct_rkey);
     } else {
-        *remote_addr_p += atomic_mr_offset;
+        *remote_addr_p += uct_ib_md_rkey_offset(uct_rkey) + atomic_mr_offset;
         return atomic_rkey;
     }
 }

@@ -241,12 +241,12 @@ UCS_TEST_P(test_ucp_mmap, dm_alloc) {
 
         buffer = malloc(size);
         /* trying put operation */
-        status = ucp_put_nbi(sender().ep(), buffer, size, 0, rkey);
+        status = ucp_put_nbi(sender().ep(), buffer, size, (uint64_t)attr.address, rkey);
         ASSERT_UCS_OK_OR_INPROGRESS(status);
         flush_worker(sender());
 
         /* trying get operation */
-        status = ucp_get_nbi(sender().ep(), buffer, size, 0, rkey);
+        status = ucp_get_nbi(sender().ep(), buffer, size, (uint64_t)attr.address, rkey);
         ASSERT_UCS_OK_OR_INPROGRESS(status);
         flush_worker(sender());
 

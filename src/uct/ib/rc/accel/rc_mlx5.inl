@@ -1315,3 +1315,12 @@ uct_rc_mlx5_iface_common_atomic_data(unsigned opcode, unsigned size, uint64_t va
     return UCS_OK;
 }
 
+
+static uint64_t UCS_F_ALWAYS_INLINE
+uct_rc_mlx5_rdma_addr(unsigned opcode, uint64_t rdma_raddr, uct_rkey_t rdma_rkey)
+{
+    assert(uct_ib_md_rkey_offset(rdma_rkey) == 0);
+    return rdma_raddr + (((opcode == MLX5_OPCODE_SEND_IMM) ||
+                          (opcode == MLX5_OPCODE_SEND)) ? 0 :
+                        uct_ib_md_rkey_offset(rdma_rkey));
+}

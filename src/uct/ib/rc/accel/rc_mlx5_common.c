@@ -363,6 +363,7 @@ ucs_status_t uct_rc_mlx5_handle_rndv(uct_rc_mlx5_iface_common_t *iface,
     /* Create "packed" rkey to pass it in the callback */
     rb = uct_md_fill_md_name(&ib_md->super, packed_rkey);
     uct_ib_md_pack_rkey(ntohl(rvh->rkey), UCT_IB_INVALID_RKEY, rb);
+    ((uct_ib_md_rkey_t*)rb)->offset = 0;
 
     /* Do not pass flags to cb, because rkey is allocated on stack */
     return iface->tm.rndv_unexp.cb(iface->tm.rndv_unexp.arg, 0, tag,

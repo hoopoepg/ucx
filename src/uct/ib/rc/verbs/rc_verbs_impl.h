@@ -162,7 +162,7 @@ uct_rc_verbs_iface_fill_inl_am_sge(uct_rc_verbs_iface_t *iface,
 #define UCT_RC_VERBS_FILL_INL_PUT_WR(_iface, _raddr, _rkey, _buf, _len) \
     _iface->inl_rwrite_wr.wr.rdma.remote_addr = _raddr; \
     _iface->inl_rwrite_wr.wr.rdma.rkey        = uct_ib_md_direct_rkey(_rkey); \
-    _iface->inl_sge[0].addr      = (uintptr_t)_buf; \
+    _iface->inl_sge[0].addr      = (uintptr_t)_buf + uct_ib_md_rkey_offset(_rkey); \
     _iface->inl_sge[0].length    = _len;
 
 #define UCT_RC_VERBS_FILL_AM_BCOPY_WR(_wr, _sge, _length, _wr_opcode) \
@@ -178,13 +178,13 @@ uct_rc_verbs_iface_fill_inl_am_sge(uct_rc_verbs_iface_t *iface,
                                   _sge, _length, _raddr, _rkey) \
     UCT_RC_VERBS_FILL_SGE(_wr, _sge, _length) \
     _wr.wr.rdma.remote_addr = _raddr; \
-    _wr.wr.rdma.rkey        = uct_ib_md_direct_rkey(_rkey); \
+    _wr.wr.rdma.rkey        = uct_ib_md_direct_rkey(_rkey) + uct_ib_md_rkey_offset(_rkey); \
     _wr_opcode              = _opcode; \
 
 #define UCT_RC_VERBS_FILL_RDMA_WR_IOV(_wr, _wr_opcode, _opcode, _sge, _sgelen, \
                                       _raddr, _rkey) \
     _wr.wr.rdma.remote_addr = _raddr; \
-    _wr.wr.rdma.rkey        = uct_ib_md_direct_rkey(_rkey); \
+    _wr.wr.rdma.rkey        = uct_ib_md_direct_rkey(_rkey) + uct_ib_md_rkey_offset(_rkey); \
     _wr.sg_list             = _sge; \
     _wr.num_sge             = _sgelen; \
     _wr_opcode              = _opcode;
