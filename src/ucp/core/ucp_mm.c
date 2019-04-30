@@ -261,8 +261,7 @@ static inline ucs_status_t ucp_mem_map_check_and_adjust_params(ucp_mem_map_param
     }
 
     if ((params->flags & UCP_MEM_MAP_FIXED) &&
-        (!params->address ||
-         ((uintptr_t)params->address % ucs_get_page_size()))) {
+        ((uintptr_t)params->address % ucs_get_page_size())) {
         ucs_error("UCP_MEM_MAP_FIXED flag requires page aligned address");
         return UCS_ERR_INVALID_PARAM;
     }

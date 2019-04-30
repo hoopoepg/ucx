@@ -271,6 +271,41 @@ UCS_TEST_P(test_md, alloc) {
     }
 }
 
+UCS_TEST_P(test_md, alloc_dm) {
+    void *address;
+    size_t size, orig_size;
+    ucs_status_t status;
+    uct_mem_h memh;
+
+    check_caps(UCT_MD_FLAG_DEVICE_ALLOC, "DM allocation");
+
+    for (unsigned i = 0; i < 300; ++i) {
+        size = orig_size = i * 100;
+        if (size == 0) {
+            continue;
+        }
+
+        address = NULL;
+
+        status = uct_md_mem_alloc(md(), &size, &address,
+                                  UCT_MD_MEM_ACCESS_ALL | UCT_MD_MEM_FLAG_FIXED,
+                                  "test DM", &memh);
+        if (status == UCS_ERR_NO_RESOURCE) {
+            continue;
+        }
+
+        ASSERT_UCS_OK(status);
+        EXPECT_GT(size, 0ul);
+
+        EXPECT_GE(size, orig_size);
+        EXPECT_TRUE(address != NULL);
+        EXPECT_TRUE(memh != UCT_MEM_HANDLE_NULL);
+
+        memset(address, 0xBB, size);
+        uct_md_mem_free(md(), memh);
+    }
+}
+
 UCS_TEST_P(test_md, mem_type_owned) {
 
     uct_md_attr_t md_attr;

@@ -50,11 +50,37 @@ static inline int uct_mem_get_mmap_flags(unsigned uct_mmap_flags)
     return mm_flags;
 }
 
+/* get number of devices which support flags */
+static int uct_mem_dm_flag_count(uct_md_h *mds, unsigned num_mds, int flags)
+{
+    ucs_status_t status;
+    unsigned md_index;
+    uct_md_attr_t md_attr;
+    uct_md_h md;
+    int cnt;
+
+    for (cnt = 0, md_index = 0; md_index < num_mds; ++md_index) {
+        md = mds[md_index];
+        status = uct_md_query(md, &md_attr);
+        if (status != UCS_OK) {
+            ucs_warn("Failed to query MD");
+            continue;
+        }
+
+        if (ucs_test_all_flags(md_attr.cap.flags, flags)) {
+            cnt++;
+        }
+    }
+
+    return cnt;
+}
+
 ucs_status_t uct_mem_alloc(void *addr, size_t min_length, unsigned flags,
                            uct_alloc_method_t *methods, unsigned num_methods,
                            uct_md_h *mds, unsigned num_mds,
                            const char *alloc_name, uct_allocated_memory_t *mem)
 {
+    int on_dm = !addr && (flags & UCT_MD_MEM_FLAG_FIXED);
     uct_alloc_method_t *method;
     uct_md_attr_t md_attr;
     ucs_status_t status;
@@ -80,8 +106,14 @@ ucs_status_t uct_mem_alloc(void *addr, size_t min_length, unsigned flags,
     }
 
     if ((flags & UCT_MD_MEM_FLAG_FIXED) &&
-        (!addr || ((uintptr_t)addr % ucs_get_page_size()))) {
+        ((uintptr_t)addr % ucs_get_page_size())) {
         ucs_debug("UCT_MD_MEM_FLAG_FIXED requires valid page size aligned address");
+        return UCS_ERR_INVALID_PARAM;
+    }
+
+    if ((flags & UCT_MD_MEM_FLAG_NONBLOCK) && on_dm) {
+        ucs_debug("UCT_MD_MEM_FLAG_NONBLOCK can't be used with "
+                  "UCT_MD_MEM_FLAG_FIXED and NULL address");
         return UCS_ERR_INVALID_PARAM;
     }
 
@@ -90,6 +122,14 @@ ucs_status_t uct_mem_alloc(void *addr, size_t min_length, unsigned flags,
 
         switch (*method) {
         case UCT_ALLOC_METHOD_MD:
+            if (on_dm &&
+                ((uct_mem_dm_flag_count(mds, num_mds, UCT_MD_FLAG_DEVICE_ALLOC) != 1) ||
+                 (uct_mem_dm_flag_count(mds, num_mds, UCT_MD_FLAG_REG) != 1))) {
+                /* DM allocation allowed on single device only, and no one else
+                 * MD can register this memory */
+                return UCS_ERR_NO_RESOURCE;
+            }
+
             /* Allocate with one of the specified memory domains */
             for (md_index = 0; md_index < num_mds; ++md_index) {
                 md = mds[md_index];
@@ -99,15 +139,19 @@ ucs_status_t uct_mem_alloc(void *addr, size_t min_length, unsigned flags,
                     return status;
                 }
 
-                /* Check if MD supports allocation */
-                if (!(md_attr.cap.flags & UCT_MD_FLAG_ALLOC)) {
+                if (on_dm && !(md_attr.cap.flags & UCT_MD_FLAG_DEVICE_ALLOC)) {
+                    /* DM requested, but not supported by MD */
                     continue;
                 }
 
-                /* Check if MD supports allocation with fixed address
-                 * if it's requested */
-                if ((flags & UCT_MD_MEM_FLAG_FIXED) &&
+                if (!on_dm && !(md_attr.cap.flags & UCT_MD_FLAG_ALLOC)) {
+                    /* DM is not requested, then ALLOC caps is required to allocate */
+                    continue;
+                }
+
+                if (!on_dm && (flags & UCT_MD_MEM_FLAG_FIXED) &&
                     !(md_attr.cap.flags & UCT_MD_FLAG_FIXED)) {
+                    /* FIXED requested, but not supported by MD */
                     continue;
                 }
 
@@ -121,25 +165,32 @@ ucs_status_t uct_mem_alloc(void *addr, size_t min_length, unsigned flags,
                 status = uct_md_mem_alloc(md, &alloc_length, &address, flags,
                                           alloc_name, &memh);
                 if (status != UCS_OK) {
-                    ucs_error("failed to allocate %zu bytes using md %s for %s: %s",
-                              alloc_length, md->component->name,
-                              alloc_name, ucs_status_string(status));
+                    if (status != UCS_ERR_NO_RESOURCE) {
+                        ucs_error("failed to allocate %zu bytes using md %s for %s: %s",
+                                  alloc_length, md->component->name,
+                                  alloc_name, ucs_status_string(status));
+                    }
                     return status;
                 }
 
                 ucs_assert(memh != UCT_MEM_HANDLE_NULL);
-                mem->md   = md;
+                mem->md       = md;
                 mem->mem_type = md_attr.cap.mem_type;
-                mem->memh = memh;
+                mem->memh     = memh;
                 goto allocated;
 
             }
+
             break;
 
         case UCT_ALLOC_METHOD_THP:
 #ifdef MADV_HUGEPAGE
             /* Fixed option is not supported for thp allocation*/
             if (flags & UCT_MD_MEM_FLAG_FIXED) {
+                break;
+            }
+
+            if (on_dm) {
                 break;
             }
 
@@ -181,6 +232,10 @@ ucs_status_t uct_mem_alloc(void *addr, size_t min_length, unsigned flags,
                 break;
             }
 
+            if (on_dm) {
+                break;
+            }
+
             alloc_length = min_length;
             address = ucs_memalign(UCS_SYS_CACHE_LINE_SIZE, alloc_length
                                    UCS_MEMTRACK_VAL);
@@ -192,6 +247,10 @@ ucs_status_t uct_mem_alloc(void *addr, size_t min_length, unsigned flags,
             break;
 
         case UCT_ALLOC_METHOD_MMAP:
+            if (on_dm) {
+                break;
+            }
+
             /* Request memory from operating system using mmap() */
             alloc_length = min_length;
             address      = addr;
@@ -208,6 +267,10 @@ ucs_status_t uct_mem_alloc(void *addr, size_t min_length, unsigned flags,
             break;
 
         case UCT_ALLOC_METHOD_HUGE:
+            if (on_dm) {
+                break;
+            }
+
             /* Allocate huge pages */
             alloc_length = min_length;
             address = (flags & UCT_MD_MEM_FLAG_FIXED) ? addr : NULL;
