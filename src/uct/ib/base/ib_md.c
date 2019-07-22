@@ -1038,12 +1038,28 @@ static ucs_status_t uct_ib_rkey_unpack(uct_md_component_t *mdc,
                                        void **handle_p)
 {
     uint64_t packed_rkey = *(const uint64_t*)rkey_buffer;
+    uct_ib_md_rkey_t *rkey;
 
-    *rkey_p   = packed_rkey;
+    rkey = malloc(sizeof(*rkey));
+    if (rkey == NULL) {
+        return UCS_ERR_NO_MEMORY;
+    }
+
+    rkey->rma_rkey    = (uint32_t)packed_rkey;
+    rkey->atomic_rkey = packed_rkey >> 32;
+
+    *rkey_p   = (uct_rkey_t)rkey;
     *handle_p = NULL;
     ucs_trace("unpacked rkey 0x%llx: direct 0x%x indirect 0x%x",
               (unsigned long long)packed_rkey,
               uct_ib_md_direct_rkey(*rkey_p), uct_ib_md_indirect_rkey(*rkey_p));
+    return UCS_OK;
+}
+
+static ucs_status_t uct_ib_rkey_release(uct_md_component_t *mdc, uct_rkey_t rkey,
+                                        void *handle)
+{
+    free((void*)rkey);
     return UCS_OK;
 }
 
@@ -1796,6 +1812,5 @@ UCT_IB_MD_OPS(uct_ib_verbs_md_ops, 0);
 
 UCT_MD_COMPONENT_DEFINE(uct_ib_mdc, UCT_IB_MD_PREFIX,
                         uct_ib_query_md_resources, uct_ib_md_open, NULL,
-                        uct_ib_rkey_unpack,
-                        (void*)ucs_empty_function_return_success /* release */,
+                        uct_ib_rkey_unpack, uct_ib_rkey_release,
                         "IB_", uct_ib_md_config_table, uct_ib_md_config_t);

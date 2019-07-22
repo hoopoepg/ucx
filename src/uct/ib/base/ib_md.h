@@ -42,6 +42,12 @@ enum {
 };
 
 
+typedef struct uct_ib_md_rkey {
+    uint32_t atomic_rkey;
+    uint32_t rma_rkey;
+} uct_ib_md_rkey_t;
+
+
 typedef struct uct_ib_md_ext_config {
     int                      eth_pause;    /**< Whether or not Pause Frame is
                                                 enabled on the Ethernet network */
@@ -188,13 +194,15 @@ uint8_t uct_ib_md_get_atomic_mr_id(uct_ib_md_t *md);
 
 static inline uint32_t uct_ib_md_direct_rkey(uct_rkey_t uct_rkey)
 {
-    return (uint32_t)uct_rkey;
+    return (uct_rkey && (uct_rkey != UCT_INVALID_RKEY)) ?
+           ((uct_ib_md_rkey_t*)uct_rkey)->rma_rkey : 0;
 }
 
 
 static uint32_t uct_ib_md_indirect_rkey(uct_rkey_t uct_rkey)
 {
-    return uct_rkey >> 32;
+    return (uct_rkey && (uct_rkey != UCT_INVALID_RKEY)) ?
+           ((uct_ib_md_rkey_t*)uct_rkey)->atomic_rkey : 0;
 }
 
 
