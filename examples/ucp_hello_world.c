@@ -96,7 +96,7 @@ static void request_init(void *request)
     ctx->completed = 0;
 }
 
-static void send_handler(void *request, ucs_status_t status)
+static void send_handler(void *request, ucs_status_t status, void *ctx)
 {
     struct ucx_context *context = (struct ucx_context *) request;
 
@@ -179,6 +179,7 @@ err:
 
 static int run_ucx_client(ucp_worker_h ucp_worker)
 {
+    ucp_request_param_t send_param;
     ucp_tag_recv_info_t info_tag;
     ucp_tag_message_h msg_tag;
     ucs_status_t status;
@@ -207,9 +208,10 @@ static int run_ucx_client(ucp_worker_h ucp_worker)
     msg->data_len = local_addr_len;
     memcpy(msg + 1, local_addr, local_addr_len);
 
-    request = ucp_tag_send_nb(server_ep, msg, msg_len,
-                              ucp_dt_make_contig(1), tag,
-                              send_handler);
+    send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK;
+    send_param.cb.send      = send_handler;
+    request                 = ucp_tag_send_nbx(server_ep, msg, msg_len, tag,
+                                               &send_param);
     if (UCS_PTR_IS_ERR(request)) {
         fprintf(stderr, "unable to send UCX address message\n");
         free(msg);
@@ -324,6 +326,7 @@ static ucs_status_t flush_ep(ucp_worker_h worker, ucp_ep_h ep)
 
 static int run_ucx_server(ucp_worker_h ucp_worker)
 {
+    ucp_request_param_t send_param;
     ucp_tag_recv_info_t info_tag;
     ucp_tag_message_h msg_tag;
     ucs_status_t status;
@@ -399,9 +402,10 @@ static int run_ucx_server(ucp_worker_h ucp_worker)
     ret = generate_test_string((char *)(msg + 1), test_string_length);
     CHKERR_JUMP(ret < 0, "generate test string", err_free_mem_type_msg);
 
-    request = ucp_tag_send_nb(client_ep, msg, msg_len,
-                              ucp_dt_make_contig(1), tag,
-                              send_handler);
+    send_param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK;
+    send_param.cb.send      = send_handler;
+    request                 = ucp_tag_send_nbx(client_ep, msg, msg_len, tag,
+                                               &send_param);
     if (UCS_PTR_IS_ERR(request)) {
         fprintf(stderr, "unable to send UCX data message\n");
         ret = -1;

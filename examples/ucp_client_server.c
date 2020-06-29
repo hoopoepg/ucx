@@ -81,7 +81,7 @@ typedef struct test_req {
 static void usage(void);
 
 static void tag_recv_cb(void *request, ucs_status_t status,
-                        ucp_tag_recv_info_t *info)
+                        const ucp_tag_recv_info_t *info, void *ctx)
 {
     test_req_t *req = request;
 
@@ -92,7 +92,8 @@ static void tag_recv_cb(void *request, ucs_status_t status,
  * The callback on the receiving side, which is invoked upon receiving the
  * stream message.
  */
-static void stream_recv_cb(void *request, ucs_status_t status, size_t length)
+static void
+stream_recv_cb(void *request, ucs_status_t status, size_t length, void *ctx)
 {
     test_req_t *req = request;
 
@@ -103,7 +104,7 @@ static void stream_recv_cb(void *request, ucs_status_t status, size_t length)
  * The callback on the sending side, which is invoked after finishing sending
  * the message.
  */
-static void send_cb(void *request, ucs_status_t status)
+static void send_cb(void *request, ucs_status_t status, void *ctx)
 {
     test_req_t *req = request;
 
@@ -267,21 +268,25 @@ static int request_finalize(ucp_worker_h ucp_worker, test_req_t *request,
 static int send_recv_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, int is_server,
                             int current_iter)
 {
+    ucp_request_param_t param;
     char recv_message[TEST_STRING_LEN]= "";
     test_req_t *request;
     size_t length;
 
+    param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK | UCP_OP_ATTR_FIELD_DATATYPE;
+    param.datatype     = ucp_dt_make_contig(TEST_STRING_LEN);
+
     if (!is_server) {
         /* Client sends a message to the server using the stream API */
-        request = ucp_stream_send_nb(ep, test_message, 1,
-                                     ucp_dt_make_contig(TEST_STRING_LEN),
-                                     send_cb, 0);
+        param.cb.send = send_cb;
+        request       = ucp_stream_send_nbx(ep, test_message, 1, &param);
     } else {
         /* Server receives a message from the client using the stream API */
-        request = ucp_stream_recv_nb(ep, &recv_message, 1,
-                                     ucp_dt_make_contig(TEST_STRING_LEN),
-                                     stream_recv_cb, &length,
-                                     UCP_STREAM_RECV_FLAG_WAITALL);
+        param.op_attr_mask  |= UCP_EP_PARAM_FIELD_FLAGS;
+        param.cb.recv_stream = stream_recv_cb;
+        param.flags          = UCP_STREAM_RECV_FLAG_WAITALL;
+        request              = ucp_stream_recv_nbx(ep, &recv_message, 1,
+                                                   &length, &param);
     }
 
     return request_finalize(ucp_worker, request, is_server, recv_message,
@@ -296,19 +301,21 @@ static int send_recv_stream(ucp_worker_h ucp_worker, ucp_ep_h ep, int is_server,
 static int send_recv_tag(ucp_worker_h ucp_worker, ucp_ep_h ep, int is_server,
                          int current_iter)
 {
+    ucp_request_param_t param;
     char recv_message[TEST_STRING_LEN]= "";
     test_req_t *request;
 
+    param.op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK | UCP_OP_ATTR_FIELD_DATATYPE;
+    param.datatype     = ucp_dt_make_contig(TEST_STRING_LEN);
     if (!is_server) {
         /* Client sends a message to the server using the Tag-Matching API */
-        request = ucp_tag_send_nb(ep, test_message, 1,
-                                  ucp_dt_make_contig(TEST_STRING_LEN), TAG,
-                                  send_cb);
+        param.cb.send = send_cb;
+        request       = ucp_tag_send_nbx(ep, test_message, 1, TAG, &param);
     } else {
         /* Server receives a message from the client using the Tag-Matching API */
-        request = ucp_tag_recv_nb(ucp_worker, &recv_message, 1,
-                                  ucp_dt_make_contig(TEST_STRING_LEN),
-                                  TAG, 0, tag_recv_cb);
+        param.cb.recv = tag_recv_cb;
+        request       = ucp_tag_recv_nbx(ucp_worker, &recv_message, 1, TAG, 0,
+                                         &param);
     }
 
     return request_finalize(ucp_worker, request, is_server, recv_message,
