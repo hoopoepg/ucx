@@ -346,11 +346,11 @@ ucs_status_t uct_rc_iface_fc_handler(uct_rc_iface_t *iface, unsigned qp_num,
                                      uct_rc_hdr_t *hdr, unsigned length,
                                      uint32_t imm_data, uint16_t lid, unsigned flags)
 {
+    uct_rc_ep_t *ep = uct_rc_iface_lookup_ep(iface, qp_num);
+    uint8_t fc_hdr  = uct_rc_fc_get_fc_hdr(hdr->am_id);
     ucs_status_t status;
     int16_t      cur_wnd;
-    uct_rc_fc_request_t *fc_req;
-    uct_rc_ep_t  *ep  = uct_rc_iface_lookup_ep(iface, qp_num);
-    uint8_t fc_hdr    = uct_rc_fc_get_fc_hdr(hdr->am_id);
+    uct_rc_pending_req_t *fc_req;
 
     ucs_assert(iface->config.fc_enabled);
 

@@ -963,10 +963,10 @@ void uct_dc_mlx5_iface_cleanup_fc_ep(uct_dc_mlx5_iface_t *iface)
 
 ucs_status_t uct_dc_mlx5_iface_fc_grant(uct_pending_req_t *self)
 {
-    uct_rc_fc_request_t *freq = ucs_derived_of(self, uct_rc_fc_request_t);
-    uct_dc_mlx5_ep_t *ep      = ucs_derived_of(freq->ep, uct_dc_mlx5_ep_t);
-    uct_rc_iface_t *iface     = ucs_derived_of(ep->super.super.iface,
-                                               uct_rc_iface_t);
+    uct_rc_pending_req_t *freq = ucs_derived_of(self, uct_rc_pending_req_t);
+    uct_dc_mlx5_ep_t *ep       = ucs_derived_of(freq->ep, uct_dc_mlx5_ep_t);
+    uct_rc_iface_t *iface      = ucs_derived_of(ep->super.super.iface,
+                                                uct_rc_iface_t);
     ucs_status_t status;
 
     ucs_assert_always(iface->config.fc_enabled);
