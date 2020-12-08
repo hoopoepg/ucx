@@ -55,9 +55,9 @@ enum {
     UCP_REQUEST_FLAG_RECV_TAG             = UCS_BIT(17),
     UCP_REQUEST_FLAG_EXTERNAL             = UCS_BIT(18),
 #if UCS_ENABLE_ASSERT
-    UCP_REQUEST_FLAG_STREAM_RECV          = UCS_BIT(19),
+    UCP_REQUEST_FLAG_STREAM_RECV          = UCS_BIT(19)
 #else
-    UCP_REQUEST_FLAG_STREAM_RECV          = 0,
+    UCP_REQUEST_FLAG_STREAM_RECV          = 0
 #endif
 };
 

@@ -493,7 +493,7 @@ protected:
     }
 };
 
-const size_t test_ucp_tag_nbx::MSG_SIZE  = 4 * 1024 * ucs_get_page_size();
+const size_t test_ucp_tag_nbx::MSG_SIZE  = 4 * UCS_KBYTE * ucs_get_page_size();
 
 UCS_TEST_P(test_ucp_tag_nbx, fallback)
 {
