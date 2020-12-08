@@ -94,9 +94,10 @@
             if (ucs_unlikely((__req) == NULL)) { \
                 _failed; \
             } \
+            __req->flags = 0; \
         } else { \
-            __req         = ((ucp_request_t*)(_param)->request) - 1; \
-            __req->flags |= UCP_REQUEST_FLAG_EXTERNAL; \
+            __req        = ((ucp_request_t*)(_param)->request) - 1; \
+            __req->flags = UCP_REQUEST_FLAG_EXTERNAL; \
         } \
         __req; \
     })
