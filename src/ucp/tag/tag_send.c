@@ -292,7 +292,7 @@ UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_tag_send_nbx,
                                         datatype, contig_length, param);
     } else {
         ucp_tag_send_req_init(req, ep, buffer, datatype, memory_type, count,
-                              tag, 0);
+                              tag, req->flags & UCP_REQUEST_FLAG_EXTERNAL);
         ret = ucp_tag_send_req(req, count, &ucp_ep_config(ep)->tag.eager,
                                param, ucp_ep_config(ep)->tag.proto);
     }

@@ -171,7 +171,8 @@ ucp_rma_nonblocking(ucp_ep_h ep, const void *buffer, size_t length,
                                 {return UCS_STATUS_PTR(UCS_ERR_NO_MEMORY);});
 
     status = ucp_rma_request_init(req, ep, buffer, length, remote_addr, rkey,
-                                  progress_cb, zcopy_thresh, 0);
+                                  progress_cb, zcopy_thresh,
+                                  req->flags & UCP_REQUEST_FLAG_EXTERNAL);
     if (ucs_unlikely(status != UCS_OK)) {
         return UCS_STATUS_PTR(status);
     }

@@ -27,8 +27,10 @@ ucp_tag_recv_common(ucp_worker_h worker, void *buffer, size_t count,
 {
     unsigned common_flags = UCP_REQUEST_FLAG_RECV_TAG |
                             UCP_REQUEST_FLAG_EXPECTED;
-    uint32_t req_flags    = (param->op_attr_mask & UCP_OP_ATTR_FIELD_CALLBACK) ?
-                            UCP_REQUEST_FLAG_CALLBACK : 0;
+    uint32_t req_flags    = ((param->op_attr_mask & UCP_OP_ATTR_FIELD_CALLBACK) ?
+                             UCP_REQUEST_FLAG_CALLBACK : 0) |
+                            ((param->op_attr_mask & UCP_OP_ATTR_FIELD_REQUEST) ?
+                             UCP_REQUEST_FLAG_EXTERNAL : 0);
     ucp_eager_first_hdr_t *eagerf_hdr;
     ucp_request_queue_t *req_queue;
     ucs_memory_type_t memory_type;
