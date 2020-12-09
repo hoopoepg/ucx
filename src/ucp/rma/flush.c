@@ -329,7 +329,7 @@ ucs_status_ptr_t ucp_ep_flush_internal(ucp_ep_h ep, unsigned req_flags,
      * flushed. req->send.flush.lanes keeps track of which lanes we still have
      * to start flush on.
      */
-    req->flags                      = req_flags;
+    req->flags                     |= req_flags;
     req->status                     = UCS_OK;
     req->super_req                  = worker_req;
     req->send.ep                    = ep;
@@ -520,7 +520,6 @@ ucp_worker_flush_nbx_internal(ucp_worker_h worker,
     req = ucp_request_get_param(worker, param,
                                 {return UCS_STATUS_PTR(UCS_ERR_NO_MEMORY);});
 
-    req->flags                   = 0;
     req->status                  = UCS_OK;
     req->flush_worker.worker     = worker;
     req->flush_worker.comp_count = 1; /* counting starts from 1, and decremented

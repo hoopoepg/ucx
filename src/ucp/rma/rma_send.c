@@ -132,7 +132,7 @@ ucp_rma_request_init(ucp_request_t *req, ucp_ep_h ep, const void *buffer,
                      size_t length, uint64_t remote_addr, ucp_rkey_h rkey,
                      uct_pending_callback_t cb, size_t zcopy_thresh, int flags)
 {
-    req->flags                = flags; /* Implicit release */
+    req->flags               |= flags; /* Implicit release */
     req->send.ep              = ep;
     req->send.buffer          = (void*)buffer;
     req->send.datatype        = ucp_dt_make_contig(1);

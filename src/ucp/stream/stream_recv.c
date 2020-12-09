@@ -236,7 +236,7 @@ ucp_stream_recv_request_init(ucp_request_t *req, ucp_ep_h ep, void *buffer,
 {
     uint32_t flags = ucp_request_param_flags(param);
 
-    req->flags              = UCP_REQUEST_FLAG_STREAM_RECV |
+    req->flags             |= UCP_REQUEST_FLAG_STREAM_RECV |
                               ((flags & UCP_STREAM_RECV_FLAG_WAITALL) ?
                                UCP_REQUEST_FLAG_STREAM_RECV_WAITALL : 0);
 #if UCS_ENABLE_ASSERT

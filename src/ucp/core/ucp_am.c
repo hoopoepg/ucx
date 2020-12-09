@@ -772,7 +772,7 @@ static void ucp_am_send_req_init(ucp_request_t *req, ucp_ep_h ep,
                                  const void *buffer, ucp_datatype_t datatype,
                                  size_t count, uint16_t flags, uint16_t am_id)
 {
-    req->flags                           = UCP_REQUEST_FLAG_SEND_AM;
+    req->flags                          |= UCP_REQUEST_FLAG_SEND_AM;
     req->send.ep                         = ep;
     req->send.msg_proto.am.am_id         = am_id;
     req->send.msg_proto.am.flags         = flags;
@@ -1056,7 +1056,7 @@ UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_am_recv_data_nbx,
     req->status        = UCS_OK;
     req->recv.worker   = worker;
     req->recv.buffer   = buffer;
-    req->flags         = UCP_REQUEST_FLAG_RECV_AM;
+    req->flags        |= UCP_REQUEST_FLAG_RECV_AM;
     req->recv.datatype = datatype;
     ucp_dt_recv_state_init(&req->recv.state, buffer, datatype, count);
     req->recv.length   = ucp_dt_length(datatype, count, buffer,

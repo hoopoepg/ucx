@@ -38,7 +38,7 @@ static void ucp_stream_send_req_init(ucp_request_t* req, ucp_ep_h ep,
                                      ucs_memory_type_t memory_type, size_t count,
                                      uint32_t flags)
 {
-    req->flags             = flags;
+    req->flags            |= flags;
     req->send.ep           = ep;
     req->send.buffer       = (void*)buffer;
     req->send.datatype     = datatype;
