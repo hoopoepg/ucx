@@ -248,6 +248,7 @@ ucs_status_t ucp_atomic_post(ucp_ep_h ep, ucp_atomic_post_op_t opcode, uint64_t 
         goto out;
     }
 
+    req->flags = 0;
     ucp_amo_init_post(req, ep, ucp_uct_op_table[opcode], op_size, remote_addr,
                       rkey, value, rkey->cache.amo_proto);
 
