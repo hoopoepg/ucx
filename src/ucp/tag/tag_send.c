@@ -220,45 +220,13 @@ UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_tag_send_nb,
                  ucp_ep_h ep, const void *buffer, size_t count,
                  uintptr_t datatype, ucp_tag_t tag, ucp_send_callback_t cb)
 {
-    ucs_status_t status;
-    ucp_request_t *req;
-    ucs_status_ptr_t ret;
+    ucp_request_param_t params = {
+        .op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE | UCP_OP_ATTR_FIELD_CALLBACK,
+        .datatype     = datatype,
+        .cb.send      = (ucp_send_nbx_callback_t)cb
+    };
 
-    UCP_CONTEXT_CHECK_FEATURE_FLAGS(ep->worker->context, UCP_FEATURE_TAG,
-                                    return UCS_STATUS_PTR(UCS_ERR_INVALID_PARAM));
-    UCP_WORKER_THREAD_CS_ENTER_CONDITIONAL(ep->worker);
-
-    ucs_trace_req("send_nb buffer %p count %zu tag %"PRIx64" to %s cb %p",
-                  buffer, count, tag, ucp_ep_peer_name(ep), cb);
-
-    status = UCS_PROFILE_CALL(ucp_tag_send_inline, ep, buffer, count,
-                              datatype, tag);
-    if (ucs_likely(status != UCS_ERR_NO_RESOURCE)) {
-        ret = UCS_STATUS_PTR(status); /* UCS_OK also goes here */
-        goto out;
-    }
-
-    status = ucp_ep_resolve_dest_ep_ptr(ep, ucp_ep_config(ep)->tag.lane);
-    if (status != UCS_OK) {
-        ret = UCS_STATUS_PTR(status);
-        goto out;
-    }
-
-    req = ucp_request_get(ep->worker);
-    if (req == NULL) {
-        ret = UCS_STATUS_PTR(UCS_ERR_NO_MEMORY);
-        goto out;
-    }
-
-    ucp_tag_send_req_init(req, ep, buffer, datatype, count, tag, 0);
-
-    ret = ucp_tag_send_req(req, count, &ucp_ep_config(ep)->tag.eager,
-                           ucp_ep_config(ep)->tag.rndv.rma_thresh,
-                           ucp_ep_config(ep)->tag.rndv.am_thresh,
-                           cb, ucp_ep_config(ep)->tag.proto, 1);
-out:
-    UCP_WORKER_THREAD_CS_EXIT_CONDITIONAL(ep->worker);
-    return ret;
+    return ucp_tag_send_nbx(ep, buffer, count, tag, &params);
 }
 
 UCS_PROFILE_FUNC(ucs_status_t, ucp_tag_send_nbr,
@@ -266,41 +234,20 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_tag_send_nbr,
                  ucp_ep_h ep, const void *buffer, size_t count,
                  uintptr_t datatype, ucp_tag_t tag, void *request)
 {
-    ucp_request_t *req = (ucp_request_t *)request - 1;
-    ucs_status_t status;
-    ucs_status_ptr_t ret;
+    ucp_request_param_t param = {
+        .op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE | UCP_OP_ATTR_FIELD_REQUEST,
+        .datatype     = datatype,
+        .request      = request
+    };
+    ucs_status_ptr_t status;
 
-    UCP_CONTEXT_CHECK_FEATURE_FLAGS(ep->worker->context, UCP_FEATURE_TAG,
-                                    return UCS_ERR_INVALID_PARAM);
-    UCP_WORKER_THREAD_CS_ENTER_CONDITIONAL(ep->worker);
-
-    ucs_trace_req("send_nbr buffer %p count %zu tag %"PRIx64" to %s req %p",
-                  buffer, count, tag, ucp_ep_peer_name(ep), request);
-
-    status = UCS_PROFILE_CALL(ucp_tag_send_inline, ep, buffer, count,
-                              datatype, tag);
-    if (ucs_likely(status != UCS_ERR_NO_RESOURCE)) {
-        UCP_WORKER_THREAD_CS_EXIT_CONDITIONAL(ep->worker);
-        return status;
+    status = ucp_tag_send_nbx(ep, buffer, count, tag, &param);
+    if (ucs_likely(status == UCS_OK)) {
+        return UCS_OK;
     }
 
-    status = ucp_ep_resolve_dest_ep_ptr(ep, ucp_ep_config(ep)->tag.lane);
-    if (status != UCS_OK) {
-        UCP_WORKER_THREAD_CS_EXIT_CONDITIONAL(ep->worker);
-        return status;
-    }
-
-    ucp_tag_send_req_init(req, ep, buffer, datatype, count, tag, 0);
-
-    ret = ucp_tag_send_req(req, count, &ucp_ep_config(ep)->tag.eager,
-                           ucp_ep_config(ep)->tag.rndv_send_nbr.rma_thresh,
-                           ucp_ep_config(ep)->tag.rndv_send_nbr.am_thresh,
-                           NULL, ucp_ep_config(ep)->tag.proto, 0);
-
-    UCP_WORKER_THREAD_CS_EXIT_CONDITIONAL(ep->worker);
-
-    if (ucs_unlikely(UCS_PTR_IS_ERR(ret))) {
-        return UCS_PTR_STATUS(ret);
+    if (ucs_unlikely(UCS_PTR_IS_ERR(status))) {
+        return UCS_PTR_STATUS(status);
     }
     return UCS_INPROGRESS;
 }
@@ -355,7 +302,80 @@ UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_tag_send_nbx,
                  ucp_ep_h ep, const void *buffer, size_t count,
                  ucp_tag_t tag, const ucp_request_param_t *param)
 {
-    return UCS_STATUS_PTR(UCS_ERR_NOT_IMPLEMENTED);
+    size_t contig_length = 0;
+    ucs_status_t status;
+    ucp_request_t *req;
+    ucs_status_ptr_t ret;
+    uintptr_t datatype;
+    uint32_t attr_mask;
+    ucp_worker_h worker;
+    ucp_send_callback_t cb;
+
+    UCP_CONTEXT_CHECK_FEATURE_FLAGS(ep->worker->context, UCP_FEATURE_TAG,
+                                    return UCS_STATUS_PTR(UCS_ERR_INVALID_PARAM));
+    UCP_WORKER_THREAD_CS_ENTER_CONDITIONAL(ep->worker);
+
+    ucs_trace_req("send_nbx buffer %p count %zu tag %" PRIx64 " to %s",
+                  buffer, count, tag, ucp_ep_peer_name(ep));
+
+    attr_mask = param->op_attr_mask &
+                (UCP_OP_ATTR_FIELD_DATATYPE | UCP_OP_ATTR_FLAG_NO_IMM_CMPL);
+
+    if (ucs_likely(attr_mask == 0))
+    {
+        status = UCS_PROFILE_CALL(ucp_tag_send_inline, ep, buffer, count, 
+                                  ucp_dt_make_contig(1), tag);
+        ucp_request_send_check_status(status, ret, goto out);
+        datatype = ucp_dt_make_contig(1);
+        contig_length = count;
+    }
+    else if (attr_mask == UCP_OP_ATTR_FIELD_DATATYPE)
+    {
+        datatype = param->datatype;
+        if (ucs_likely(UCP_DT_IS_CONTIG(datatype)))
+        {
+            contig_length = ucp_contig_dt_length(datatype, count);
+            status = UCS_PROFILE_CALL(ucp_tag_send_inline, ep, buffer,
+                                      contig_length, datatype, tag);
+            ucp_request_send_check_status(status, ret, goto out);
+        }
+    }
+    else
+    {
+        datatype = ucp_dt_make_contig(1);
+    }
+
+    if (ucs_unlikely(param->op_attr_mask & UCP_OP_ATTR_FLAG_FORCE_IMM_CMPL))
+    {
+        ret = UCS_STATUS_PTR(UCS_ERR_NO_RESOURCE);
+        goto out;
+    }
+
+    worker = ep->worker;
+    req = ucp_request_get_param(worker, param,
+                                {
+                                    ret = UCS_STATUS_PTR(UCS_ERR_NO_MEMORY);
+                                    goto out;
+                                });
+
+    if (param->op_attr_mask & UCP_OP_ATTR_FIELD_CALLBACK) {
+        cb             = (ucp_send_callback_t)param->cb.send;
+        req->user_data = param->op_attr_mask & UCP_OP_ATTR_FIELD_USER_DATA ?
+                         param->user_data : NULL;
+    } else {
+        cb = NULL;
+    }
+
+
+    ucp_tag_send_req_init(req, ep, buffer, datatype, count, tag, 0);
+    ret = ucp_tag_send_req(req, count, &ucp_ep_config(ep)->tag.eager,
+                           ucp_ep_config(ep)->tag.rndv.rma_thresh,
+                           ucp_ep_config(ep)->tag.rndv.am_thresh,
+                           cb, ucp_ep_config(ep)->tag.proto, !!cb);
+
+out:
+    UCP_WORKER_THREAD_CS_EXIT_CONDITIONAL(ep->worker);
+    return ret;
 }
 
 UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_tag_send_sync_nbx,

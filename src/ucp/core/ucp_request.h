@@ -110,6 +110,7 @@ enum {
 struct ucp_request {
     ucs_status_t                  status;  /* Operation status */
     uint32_t                      flags;   /* Request flags */
+    void                          *user_data;
 
     union {
 

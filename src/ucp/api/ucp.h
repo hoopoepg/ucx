@@ -533,11 +533,12 @@ typedef enum {
 typedef enum {
     UCP_OP_ATTR_FIELD_REQUEST       = UCS_BIT(0),  /**< request field */
     UCP_OP_ATTR_FIELD_CALLBACK      = UCS_BIT(1),  /**< cb field */
-    UCP_OP_ATTR_FIELD_DATATYPE      = UCS_BIT(2),  /**< datatype field */
+    UCP_OP_ATTR_FIELD_USER_DATA     = UCS_BIT(2),  /**< user_data field */
+    UCP_OP_ATTR_FIELD_DATATYPE      = UCS_BIT(3),  /**< datatype field */
+    UCP_OP_ATTR_FIELD_FLAGS         = UCS_BIT(4),  /**< operation-specific flags */
 
-    UCP_OP_ATTR_FLAG_NO_IMM_CMPL    = UCS_BIT(16), /**< deny immediate completion */
-    UCP_OP_ATTR_FLAG_NO_ZCOPY       = UCS_BIT(17), /**< do not use zcopy proto */
-    UCP_OP_ATTR_FLAG_FORCE_IMM_CMPL = UCS_BIT(18)  /**< force immediate complete
+    UCP_OP_ATTR_FLAG_NO_IMM_CMPL    = UCS_BIT(15), /**< deny immediate completion */
+    UCP_OP_ATTR_FLAG_FORCE_IMM_CMPL = UCS_BIT(16)  /**< force immediate complete
                                                         operation, fail if the
                                                         operation cannot be
                                                         completed immediately */
@@ -1201,7 +1202,7 @@ struct ucp_tag_recv_info {
  * @ingroup UCP_CONTEXT
  * @brief Operation parameters passed to @ref ucp_tag_send_nbx,
  *        @ref ucp_tag_send_sync_nbx, @ref ucp_tag_recv_nbx, @ref ucp_put_nbx,
- *        @ref ucp_get_nbx
+ *        @ref ucp_get_nbx, @ref ucp_am_send_nbx and @ref ucp_am_recv_data_nbx.
  *
  * The structure @ref ucp_request_param_t is used to specify datatype of
  * operation, provide user request in case the external request is used,
@@ -1212,7 +1213,7 @@ struct ucp_tag_recv_info {
  *          operation completed immediately (status == UCS_OK) then
  *          callback is not called.
  *
- * \code{.c}
+ * @code{.c}
  * ucs_status_ptr_t send_data(ucp_ep_h ep, void *buffer, size_t length,
  *                            ucp_tag_t tag, void *request)
  * {
@@ -1220,7 +1221,7 @@ struct ucp_tag_recv_info {
  *         .op_attr_mask               = UCP_OP_ATTR_FIELD_CALLBACK |
  *                                       UCP_OP_ATTR_FIELD_REQUEST,
  *         .request                    = request,
- *         .cb.ucp_send_nbx_callback_t = custom_send_callback_f,
+ *         .cb.send                    = custom_send_callback_f,
  *         .user_data                  = pointer_to_user_context_passed_to_cb
  *     };
  *
@@ -1235,7 +1236,7 @@ struct ucp_tag_recv_info {
  *
  *     return status;
  * }
- * \endcode
+ * @endcode
  */
 typedef struct {
     /**
@@ -1243,7 +1244,10 @@ typedef struct {
      * bits from @ref ucp_op_attr_t. Fields not specified in this mask will be
      * ignored. Provides ABI compatibility with respect to adding new fields.
      */
-    uint64_t       op_attr_mask;
+    uint32_t       op_attr_mask;
+
+    /* Operation specific flags. */
+    uint32_t       flags;
 
     /**
      * Request handle allocated by the user. There should
@@ -1273,6 +1277,27 @@ typedef struct {
      * Pointer to user data passed to callback function.
      */
     void          *user_data;
+
+    /**
+     * Reply buffer. Can be used for storing operation result, for example by
+     * @ref ucp_atomic_op_nbx.
+     */
+    void          *reply_buffer;
+
+    /**
+     * Pointer to the information where received data details are stored
+     * in case of an immediate completion of receive operation. The user has to
+     * provide a pointer to valid memory/variable which will be updated on function
+     * return.
+     */
+    union {
+        size_t              *length;   /* Length of received message in bytes.
+                                          Relevant for non-tagged receive
+                                          operations. */
+        ucp_tag_recv_info_t *tag_info; /* Information about received message.
+                                          Relevant for @a ucp_tag_recv_nbx
+                                          function. */
+    } recv_info;
 } ucp_request_param_t;
 
 
