@@ -321,32 +321,25 @@ UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_tag_send_nbx,
     attr_mask = param->op_attr_mask &
                 (UCP_OP_ATTR_FIELD_DATATYPE | UCP_OP_ATTR_FLAG_NO_IMM_CMPL);
 
-    if (ucs_likely(attr_mask == 0))
-    {
+    if (ucs_likely(attr_mask == 0)) {
         status = UCS_PROFILE_CALL(ucp_tag_send_inline, ep, buffer, count, 
                                   ucp_dt_make_contig(1), tag);
         ucp_request_send_check_status(status, ret, goto out);
         datatype = ucp_dt_make_contig(1);
         contig_length = count;
-    }
-    else if (attr_mask == UCP_OP_ATTR_FIELD_DATATYPE)
-    {
+    } else if (attr_mask == UCP_OP_ATTR_FIELD_DATATYPE) {
         datatype = param->datatype;
-        if (ucs_likely(UCP_DT_IS_CONTIG(datatype)))
-        {
+        if (ucs_likely(UCP_DT_IS_CONTIG(datatype))) {
             contig_length = ucp_contig_dt_length(datatype, count);
             status = UCS_PROFILE_CALL(ucp_tag_send_inline, ep, buffer,
                                       contig_length, datatype, tag);
             ucp_request_send_check_status(status, ret, goto out);
         }
-    }
-    else
-    {
+    } else {
         datatype = ucp_dt_make_contig(1);
     }
 
-    if (ucs_unlikely(param->op_attr_mask & UCP_OP_ATTR_FLAG_FORCE_IMM_CMPL))
-    {
+    if (ucs_unlikely(param->op_attr_mask & UCP_OP_ATTR_FLAG_FORCE_IMM_CMPL)) {
         ret = UCS_STATUS_PTR(UCS_ERR_NO_RESOURCE);
         goto out;
     }

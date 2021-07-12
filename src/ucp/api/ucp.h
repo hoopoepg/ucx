@@ -1279,12 +1279,6 @@ typedef struct {
     void          *user_data;
 
     /**
-     * Reply buffer. Can be used for storing operation result, for example by
-     * @ref ucp_atomic_op_nbx.
-     */
-    void          *reply_buffer;
-
-    /**
      * Pointer to the information where received data details are stored
      * in case of an immediate completion of receive operation. The user has to
      * provide a pointer to valid memory/variable which will be updated on function
