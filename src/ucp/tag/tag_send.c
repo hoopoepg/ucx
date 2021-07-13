@@ -112,7 +112,7 @@ ucp_tag_send_req(ucp_request_t *req, size_t dt_count,
         return UCS_STATUS_PTR(status);
     }
 
-    if (enable_zcopy) {
+    if (cb != NULL) {
         ucp_request_set_callback(req, send.cb, cb)
     }
 
@@ -235,7 +235,8 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_tag_send_nbr,
                  uintptr_t datatype, ucp_tag_t tag, void *request)
 {
     ucp_request_param_t param = {
-        .op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE | UCP_OP_ATTR_FIELD_REQUEST,
+        .op_attr_mask = UCP_OP_ATTR_FIELD_DATATYPE | UCP_OP_ATTR_FIELD_REQUEST |
+                        UCP_OP_ATTR_FLAG_NO_ZCOPY,
         .datatype     = datatype,
         .request      = request
     };
@@ -364,7 +365,8 @@ UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_tag_send_nbx,
     ret = ucp_tag_send_req(req, count, &ucp_ep_config(ep)->tag.eager,
                            ucp_ep_config(ep)->tag.rndv.rma_thresh,
                            ucp_ep_config(ep)->tag.rndv.am_thresh,
-                           cb, ucp_ep_config(ep)->tag.proto, !!cb);
+                           cb, ucp_ep_config(ep)->tag.proto,
+                           !(param->op_attr_mask & UCP_OP_ATTR_FLAG_NO_ZCOPY));
 
 out:
     UCP_WORKER_THREAD_CS_EXIT_CONDITIONAL(ep->worker);

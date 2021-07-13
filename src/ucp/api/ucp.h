@@ -538,10 +538,11 @@ typedef enum {
     UCP_OP_ATTR_FIELD_FLAGS         = UCS_BIT(4),  /**< operation-specific flags */
 
     UCP_OP_ATTR_FLAG_NO_IMM_CMPL    = UCS_BIT(15), /**< deny immediate completion */
-    UCP_OP_ATTR_FLAG_FORCE_IMM_CMPL = UCS_BIT(16)  /**< force immediate complete
+    UCP_OP_ATTR_FLAG_FORCE_IMM_CMPL = UCS_BIT(16), /**< force immediate complete
                                                         operation, fail if the
                                                         operation cannot be
                                                         completed immediately */
+    UCP_OP_ATTR_FLAG_NO_ZCOPY       = UCS_BIT(17)  /**< do not use zcopy proto */
 } ucp_op_attr_t;
 
 
