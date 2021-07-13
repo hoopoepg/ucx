@@ -119,7 +119,7 @@ ucp_request_complete_send(ucp_request_t *req, ucs_status_t status)
                   req, req + 1, UCP_REQUEST_FLAGS_ARG(req->flags),
                   ucs_status_string(status));
     UCS_PROFILE_REQUEST_EVENT(req, "complete_send", status);
-    ucp_request_complete(req, send.cb, status);
+    ucp_request_complete(req, send.cb, status, req->user_data);
 }
 
 static UCS_F_ALWAYS_INLINE void

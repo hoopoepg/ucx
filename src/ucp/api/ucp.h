@@ -537,12 +537,11 @@ typedef enum {
     UCP_OP_ATTR_FIELD_DATATYPE      = UCS_BIT(3),  /**< datatype field */
     UCP_OP_ATTR_FIELD_FLAGS         = UCS_BIT(4),  /**< operation-specific flags */
 
-    UCP_OP_ATTR_FLAG_NO_IMM_CMPL    = UCS_BIT(15), /**< deny immediate completion */
-    UCP_OP_ATTR_FLAG_FORCE_IMM_CMPL = UCS_BIT(16), /**< force immediate complete
+    UCP_OP_ATTR_FLAG_NO_IMM_CMPL    = UCS_BIT(16), /**< deny immediate completion */
+    UCP_OP_ATTR_FLAG_FORCE_IMM_CMPL = UCS_BIT(18)  /**< force immediate complete
                                                         operation, fail if the
                                                         operation cannot be
                                                         completed immediately */
-    UCP_OP_ATTR_FLAG_NO_ZCOPY       = UCS_BIT(17)  /**< do not use zcopy proto */
 } ucp_op_attr_t;
 
 
@@ -1201,9 +1200,7 @@ struct ucp_tag_recv_info {
 
 /**
  * @ingroup UCP_CONTEXT
- * @brief Operation parameters passed to @ref ucp_tag_send_nbx,
- *        @ref ucp_tag_send_sync_nbx, @ref ucp_tag_recv_nbx, @ref ucp_put_nbx,
- *        @ref ucp_get_nbx, @ref ucp_am_send_nbx and @ref ucp_am_recv_data_nbx.
+ * @brief Operation parameters passed to @ref ucp_tag_send_nbx.
  *
  * The structure @ref ucp_request_param_t is used to specify datatype of
  * operation, provide user request in case the external request is used,

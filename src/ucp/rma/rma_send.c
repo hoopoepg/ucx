@@ -192,7 +192,7 @@ ucp_rma_nonblocking_cb(ucp_ep_h ep, const void *buffer, size_t length,
         return UCS_STATUS_PTR(status);
     }
 
-    return ucp_rma_send_request_cb(req, cb);
+    return ucp_rma_send_request_cb(req, (ucp_send_nbx_callback_t)cb);
 }
 
 ucs_status_t ucp_put_nbi(ucp_ep_h ep, const void *buffer, size_t length,

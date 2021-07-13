@@ -15,7 +15,7 @@
 
 
 static UCS_F_ALWAYS_INLINE ucs_status_ptr_t
-ucp_rma_send_request_cb(ucp_request_t *req, ucp_send_callback_t cb)
+ucp_rma_send_request_cb(ucp_request_t *req, ucp_send_nbx_callback_t cb)
 {
     ucs_status_t status = ucp_request_send(req, 0);
 

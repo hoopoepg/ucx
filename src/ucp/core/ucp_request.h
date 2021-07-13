@@ -117,13 +117,13 @@ struct ucp_request {
         /* "send" part - used for tag_send, am_send, stream_send, put, get, and atomic
          * operations */
         struct {
-            ucp_ep_h              ep;
-            void                  *buffer;  /* Send buffer */
-            ucp_datatype_t        datatype; /* Send type */
-            size_t                length;   /* Total length, in bytes */
-            ucs_memory_type_t     mem_type; /* Memory type */
-            ucp_send_callback_t   cb;       /* Completion callback */
-            uint64_t              rndv_req_id;
+            ucp_ep_h                ep;
+            void                    *buffer;  /* Send buffer */
+            ucp_datatype_t          datatype; /* Send type */
+            size_t                  length;   /* Total length, in bytes */
+            ucs_memory_type_t       mem_type; /* Memory type */
+            ucp_send_nbx_callback_t cb;       /* Completion callback */
+            uint64_t                rndv_req_id;
 
             union {
                 ucp_wireup_msg_t  wireup;
